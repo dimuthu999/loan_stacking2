@@ -1,0 +1,21 @@
+---
+title: "Loan Stacking"
+output: 
+  html_document: 
+    css: bodycss.css
+    fig_height: 6
+    fig_width: 12
+    toc: yes
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+```{r echo=FALSE}
+path = "E:/loan_stacking"
+setwd(path)
+
+# following file was created by the script lc_prosper_merge.R available at 
+loandata <- readRDS(file="lc_prosper_merged.rds")
+```
+
