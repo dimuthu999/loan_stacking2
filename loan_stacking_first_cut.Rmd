@@ -11,11 +11,196 @@ output:
 knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ```
 
-```{r echo=FALSE}
-path = "E:/loan_stacking"
+```{r}
+rm(list=ls())
+path = "E:/loan_stacking/"
 setwd(path)
-
-# following file was created by the script lc_prosper_merge.R available at 
+library(plyr)
+library(psych)
+library(stargazer)
+library(Matching)
+library(sandwich)
+output.type="text"
+# following file was created by the script lc_prosper_merge.R available at https://github.com/dimuthu999/loan_stacking2/blob/master/lc_prosper_merge.R
 loandata <- readRDS(file="lc_prosper_merged.rds")
+
+loandata['default_4months'] <- ifelse(loandata$delinquent_days>120,1,0)
+loandata['loang_age'] <- floor(as.numeric(loandata$data_date-loandata$issued_date)/30)
+
+# city_data <- ddply(loandata,.(state,city),summarise,obs=length(loan_id))
+# saveRDS(city_data,file="city_data.rds")
+city_data <- readRDS(file = "city_data.rds")
+```
+# Summary Stats
+```{r summaystats}
+
+stargazer(loandata[loandata$lending_club==1, c("annual_income","credit_history_months","dti","emp_length","fico","home_ownership","income_verified","inq_last_6mths","interest_rate","loan_amount","loan_term","pct_funded","loang_age","default_4months")], type = output.type, 
+  summary.stat = c("mean", "sd", "p25", "median", "p75", "n"),title="Lending Club Loans"
+)
+
+stargazer(loandata[loandata$lending_club==0, c("annual_income","credit_history_months","dti","emp_length","fico","home_ownership","income_verified","inq_last_6mths","interest_rate","loan_amount","loan_term","pct_funded","loang_age","default_4months")], type = output.type, 
+  summary.stat = c("mean", "sd", "p25", "median", "p75", "n"),title="Prosper Loans"
+)
+
+```
+
+# Matching
+```{r matching}
+
+# setwd(path)
+loandata <- merge(loandata,city_data,by=c("state","city"))
+loandata <- loandata[loandata$obs<=25,]
+loandata$interest_rate <- as.numeric(loandata$interest_rate)
+
+# prosper_loans <- loandata[loandata$lending_club==0,]
+# lc_loans <- loandata[loandata$lending_club==1,]
+# 
+# matched_data <- NULL
+# for(i in 1:nrow(prosper_loans)) {
+#   cat(i, " of ",nrow(prosper_loans),"\n")
+#   temp <- lc_loans[lc_loans$state== prosper_loans[i,]$state & lc_loans$city==prosper_loans[i,]$city & lc_loans$accepted_date>= prosper_loans[i,]$accepted_date-6 & lc_loans$accepted_date<= prosper_loans[i,]$accepted_date+6 & lc_loans$annual_income >= prosper_loans[i,]$annual_income-5000 & lc_loans$annual_income <= prosper_loans[i,]$annual_income+5000 & lc_loans$emp_length <= prosper_loans[i,]$emp_length+12 & lc_loans$emp_length >= prosper_loans[i,]$emp_length-12,]
+# 
+#   # temp <- lc_loans[lc_loans$state== prosper_loans[i,]$state & lc_loans$city==prosper_loans[i,]$city & lc_loans$accepted_date>= prosper_loans[i,]$accepted_date-1 & lc_loans$accepted_date<= prosper_loans[i,]$accepted_date+1 ,]
+#   temp <- temp[!is.na(temp$city),]
+#   if(nrow(temp)>1) {
+#     temp = temp[which.min(abs(temp$annual_income-prosper_loans[i,]$annual_income)),]
+#   }
+#   if(nrow(temp)==1) matched_data <- rbind(matched_data,rbind(prosper_loans[i,],temp))
+# }
+# saveRDS(matched_data,file = paste(path,"stacked_loans_obs25_income5k_days3.rds",sep = ""))
+
+# stacked_loans <- readRDS(file = "stacked_loans_obs10_days1_none.rds")
+stacked_loans <- readRDS(file = paste(path,"stacked_loans_obs25_income5k_days3.rds",sep = ""))
+
+```
+
+```{r basicreg}
+loandata['stacked'] <- ifelse(loandata$loan_id %in% stacked_loans$loan_id,1,0)
+
+def_formula <- as.formula("default_4months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)")
+def_formula2 <- as.formula("default_4months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)")
+
+
+ols <- list()
+ols[[1]] <- lm(def_formula,data = loandata[loandata$lending_club==0,])
+ols[[2]] <- lm(def_formula,data = loandata[loandata$lending_club==1,])
+ols[[3]] <- lm(def_formula2,data = loandata)
+
+# se <- list()
+# se[[1]] <- sqrt(diag(vcovHAC(ols[[1]])))
+# se[[2]] <- sqrt(diag(vcovHAC(ols[[2]])))
+# se[[3]] <- sqrt(diag(vcovHAC(ols[[3]])))
+
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"))
+```
+
+```{r matchedreg}
+library(zoo)
+loandata['accept_qtr'] <- as.yearqtr(loandata$accepted_date)
+loandata['accept_yr'] <- format(loandata$accepted_date,"%Y")
+stacked_prosper <- loandata[loandata$stacked==1 & loandata$lending_club==0,]
+unstacked_prosper <- loandata[loandata$stacked==0 & loandata$lending_club==0,]
+
+matched_data <- NULL
+for(i in 1:nrow(stacked_prosper)){
+  # cat(i,"\n")
+  temp <- unstacked_prosper[unstacked_prosper$state == stacked_prosper[i,]$state & unstacked_prosper$city == stacked_prosper[i,]$city & unstacked_prosper$accept_yr == stacked_prosper[i,]$accept_yr , ]
+#   
+#   # temp <- lc_loans[lc_loans$accepted_date>= prosper_loans[i,]$accepted_date-0 & lc_loans$accepted_date<= prosper_loans[i,]$accepted_date+0 ,]
+  temp <- temp[!is.na(temp$city),]
+
+  if(nrow(temp)!=0) matched_data <- rbind(matched_data,rbind(stacked_prosper[i,],temp))
+}
+
+prosper_matched = matched_data
+
+
+stacked_lc <- loandata[loandata$stacked==1 & loandata$lending_club==1,]
+unstacked_lc <- loandata[loandata$stacked==0 & loandata$lending_club==1,]
+
+matched_data <- NULL
+for(i in 1:nrow(stacked_lc)){
+  # cat(i,"\n")
+  temp <- unstacked_lc[unstacked_lc$state == stacked_lc[i,]$state & unstacked_lc$city == stacked_lc[i,]$city & unstacked_lc$accept_yr == stacked_lc[i,]$accept_yr, ]
+#   
+#   # temp <- lc_loans[lc_loans$accepted_date>= prosper_loans[i,]$accepted_date-0 & lc_loans$accepted_date<= prosper_loans[i,]$accepted_date+0 ,]
+  temp <- temp[!is.na(temp$city),]
+
+  if(nrow(temp)!=0) matched_data <- rbind(matched_data,rbind(stacked_lc[i,],temp))
+}
+
+lc_matched = matched_data
+
+matched_data = rbind(prosper_matched,lc_matched)
+
+ols <- list()
+ols[[1]] <- lm(def_formula,data = prosper_matched)
+ols[[2]] <- lm(def_formula,data = lc_matched)
+ols[[3]] <- lm(def_formula2,data = matched_data)
+
+# se <- list()
+# se[[1]] <- sqrt(diag(vcovHAC(ols[[1]])))
+# se[[2]] <- sqrt(diag(vcovHAC(ols[[2]])))
+# se[[3]] <- sqrt(diag(vcovHAC(ols[[3]])))
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Matched Regression")
+```
+
+```{r stacked}
+def_formula <- as.formula("stacked~annual_income+fico+emp_length+credit_history_months+factor(home_ownership)+factor(state)")
+def_formula2 <- as.formula("stacked~annual_income+fico+emp_length+credit_history_months+factor(home_ownership)+factor(state)+factor(lending_club)")
+
+ols <- list()
+ols[[1]] <- lm(def_formula,data = loandata[loandata$lending_club==0,])
+ols[[2]] <- lm(def_formula,data = loandata[loandata$lending_club==1,])
+ols[[3]] <- lm(def_formula2,data = loandata)
+
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Inq Last 6 Months")
+```
+
+
+```{r inq_6months}
+def_formula <- as.formula("inq_last_6mths~factor(stacked)+factor(state)")
+def_formula2 <- as.formula("inq_last_6mths~factor(stacked)+factor(state)+factor(lending_club)")
+
+ols <- list()
+ols[[1]] <- lm(def_formula,data = loandata[loandata$lending_club==0,])
+ols[[2]] <- lm(def_formula,data = loandata[loandata$lending_club==1,])
+ols[[3]] <- lm(def_formula2,data = loandata)
+
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Inq Last 6 Months")
+```
+
+```{r loan_amount}
+def_formula <- as.formula("loan_amount~factor(stacked)+factor(state)")
+def_formula2 <- as.formula("loan_amount~factor(stacked)+factor(state)+factor(lending_club)")
+
+ols <- list()
+ols[[1]] <- lm(def_formula,data = loandata[loandata$lending_club==0,])
+ols[[2]] <- lm(def_formula,data = loandata[loandata$lending_club==1,])
+ols[[3]] <- lm(def_formula2,data = loandata)
+
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Loan Amount")
+```
+```{r deltime}
+loandata['time_to_delinq'] <- as.numeric(loandata$data_date-loandata$delinquent_days-loandata$issued_date)
+loandata['def_in_2_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq<=60,1,0)
+loandata['def_in_3_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq<=90,1,0)
+loandata['def_in_6_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq<=180,1,0)
+loandata['def_after_6_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq>180,1,0)
+
+def_formula1 <- as.formula("def_in_6_months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)")
+def_formula2 <- as.formula("def_after_6_months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)")
+
+ols <- list()
+ols[[1]] <- lm(def_formula1,data = loandata)
+ols[[2]] <- lm(def_formula2,data = loandata)
+
+
+# se <- list()
+# se[[1]] <- sqrt(diag(vcovHAC(ols[[1]])))
+# se[[2]] <- sqrt(diag(vcovHAC(ols[[2]])))
+# se[[3]] <- sqrt(diag(vcovHAC(ols[[3]])))
+
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"))
 ```
 

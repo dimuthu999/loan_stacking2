@@ -1,7 +1,7 @@
 rm(list=ls())
 library(zoo)
 
-path = "E:/loan_stacking"
+path = "E:/loan_stacking2"
 setwd(path)
 trim <- function (x) {
   y = gsub("^\\s+|\\s+$", "", x)
@@ -10,17 +10,18 @@ trim <- function (x) {
   return(y)
 }
 
-lc_raw = readRDS(file="lendingclub_raw.rds")
+lc_raw = readRDS(file="E:/loan_stacking/lendingclub_raw.rds")
 lc_keep = c("id","member_id","loan_amnt","funded_amnt","term","int_rate","emp_length",
             "home_ownership","annual_inc","is_inc_v","accept_d","issue_d","addr_city","addr_state",
-            "dti","last_pymnt_d","len","fico","inq_last_6mths")
+            "dti","last_pymnt_d","len","fico","inq_last_6mths","delinq_amnt")
 lc_keep_names = c("loan_id","borrower_id","loan_amount","pct_funded","loan_term","interest_rate","emp_length",
                   "home_ownership","annual_income","income_verified","accepted_date","issued_date","city","state",
-                  "dti","inq_last_6mths","last_payment_month","credit_history_months","fico")
+                  "dti","delinquent_amount","inq_last_6mths","last_payment_month","credit_history_months","fico")
 
 loandata <- lc_raw[,names(lc_raw) %in% lc_keep]
 names(loandata) <- lc_keep_names
 loandata <- loandata[ , order(names(loandata))]
+      loandata$last_payment_month <- ifelse(is.na(as.numeric(as.Date(loandata$last_payment_month, "%m/%d/%Y"))),loandata$issued_date,loandata$last_payment_month)
       loandata$pct_funded = loandata$pct_funded/loandata$loan_amount
       loandata$emp_length <- trim(loandata$emp_length)
       loandata$emp_length <- as.numeric(substr(loandata$emp_length,1,regexpr(' ', loandata$emp_length)[1]-1))*12
@@ -35,17 +36,17 @@ loandata <- loandata[ , order(names(loandata))]
       loandata$city <- tolower(trim(loandata$city))
       loandata$state <- tolower(trim(loandata$state))
       loandata['data_date'] <- max(as.Date(loandata$last_payment_month, "%m/%d/%Y"),na.rm = TRUE)
-      loandata['delinquent_days'] <- as.numeric(loandata$data_date - as.Date(loandata$last_payment_month, "%m/%d/%Y"))
+      loandata['delinquent_days'] <- as.numeric(loandata$data_date - as.Date(loandata$last_payment_month, "%m/%d/%Y"))-30
       loandata$last_payment_month <- as.yearmon(as.Date(loandata$last_payment_month, "%m/%d/%Y"))
       loandata['lending_club'] <-1
 
-prosper_raw = readRDS(file="prosper_raw.rds")
+prosper_raw = readRDS(file="E:/loan_stacking/prosper_raw.rds")
 prosper_raw <- prosper_raw[!duplicated(prosper_raw),]
 prosper_keep = c("LoanKey","MemberKey.x","LoanOriginalAmount","PercentFunded.x","Term","BorrowerRate.x","MonthsEmployed",
                  "IsBorrowerHomeowner","StatedMonthlyIncome.x","IncomeVerifiable.x","ListingCreationDate.y",
                  "LoanOriginationDate.x","BorrowerCity","BorrowerState.y","LoanCurrentDaysDelinquent","DebtToIncomeRatio",
-                 "FirstRecordedCreditLine.x","FICO","InquiriesLast6Months.x")
-prosper_keep_names = c("loan_term","interest_rate","home_ownership","credit_history_months","inq_last_6mths","dti","income_verified",
+                 "FirstRecordedCreditLine.x","FICO","InquiriesLast6Months.x","AmountDelinquent.x")
+prosper_keep_names = c("loan_term","interest_rate","home_ownership","credit_history_months","inq_last_6mths","delinquent_amount","dti","income_verified",
                        "annual_income","loan_id","last_payment_month","loan_amount","issued_date","borrower_id","pct_funded",
                        "accepted_date","emp_length","state","city","fico")
 loandata2 <- prosper_raw[,names(prosper_raw) %in% prosper_keep]
@@ -75,6 +76,7 @@ loandata2 <- loandata2[ , order(names(loandata2))]
       loandata2$state <- tolower(trim(loandata2$state))
       loandata2$state <- ifelse(loandata2$state=="null",NA,loandata2$state)
       loandata2$inq_last_6mths <- as.numeric(loandata2$inq_last_6mths)
+      loandata2$delinquent_amount <- as.numeric(loandata2$delinquent_amount)
       loandata2['lending_club'] = 0
 
 loandata <- rbind(loandata,loandata2)
