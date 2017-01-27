@@ -91,7 +91,7 @@ ols[[3]] <- lm(def_formula2,data = loandata)
 # se[[2]] <- sqrt(diag(vcovHAC(ols[[2]])))
 # se[[3]] <- sqrt(diag(vcovHAC(ols[[3]])))
 
-stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"))
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),no.space = TRUE)
 ```
 
 ```{r matchedreg}
@@ -142,7 +142,7 @@ ols[[3]] <- lm(def_formula2,data = matched_data)
 # se[[1]] <- sqrt(diag(vcovHAC(ols[[1]])))
 # se[[2]] <- sqrt(diag(vcovHAC(ols[[2]])))
 # se[[3]] <- sqrt(diag(vcovHAC(ols[[3]])))
-stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Matched Regression")
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Matched Regression",no.space = TRUE)
 ```
 
 ```{r stacked}
@@ -154,7 +154,7 @@ ols[[1]] <- lm(def_formula,data = loandata[loandata$lending_club==0,])
 ols[[2]] <- lm(def_formula,data = loandata[loandata$lending_club==1,])
 ols[[3]] <- lm(def_formula2,data = loandata)
 
-stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Inq Last 6 Months")
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Inq Last 6 Months",no.space = TRUE)
 ```
 
 
@@ -167,7 +167,7 @@ ols[[1]] <- lm(def_formula,data = loandata[loandata$lending_club==0,])
 ols[[2]] <- lm(def_formula,data = loandata[loandata$lending_club==1,])
 ols[[3]] <- lm(def_formula2,data = loandata)
 
-stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Inq Last 6 Months")
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Inq Last 6 Months",no.space = TRUE)
 ```
 
 ```{r loan_amount}
@@ -179,14 +179,12 @@ ols[[1]] <- lm(def_formula,data = loandata[loandata$lending_club==0,])
 ols[[2]] <- lm(def_formula,data = loandata[loandata$lending_club==1,])
 ols[[3]] <- lm(def_formula2,data = loandata)
 
-stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Loan Amount")
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Loan Amount",no.space = TRUE)
 ```
 ```{r deltime}
 loandata['time_to_delinq'] <- as.numeric(loandata$data_date-loandata$delinquent_days-loandata$issued_date)
-loandata['def_in_2_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq<=60,1,0)
-loandata['def_in_3_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq<=90,1,0)
-loandata['def_in_6_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq<=180,1,0)
-loandata['def_after_6_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq>180,1,0)
+loandata['def_in_6_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq<=190,1,0)
+loandata['def_after_6_months'] <- ifelse(loandata$default_4months==1 & loandata$time_to_delinq>190,1,0)
 
 def_formula1 <- as.formula("def_in_6_months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)")
 def_formula2 <- as.formula("def_after_6_months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)")
@@ -201,6 +199,6 @@ ols[[2]] <- lm(def_formula2,data = loandata)
 # se[[2]] <- sqrt(diag(vcovHAC(ols[[2]])))
 # se[[3]] <- sqrt(diag(vcovHAC(ols[[3]])))
 
-stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"))
+stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),no.space = TRUE)
 ```
 
