@@ -123,7 +123,16 @@ $(document).ready(function () {
 <div id="TOC">
 <ul>
 <li><a href="#summary-stats">Summary Stats</a></li>
-<li><a href="#matching">Matching</a></li>
+<li><a href="#matching">Matching</a><ul>
+<li><a href="#matching-small-cities">Matching Small Cities</a></li>
+<li><a href="#matching-medium-cities">Matching Medium Cities</a></li>
+</ul></li>
+<li><a href="#baseline-regression">Baseline Regression</a></li>
+<li><a href="#matched-regression">Matched Regression</a></li>
+<li><a href="#inquiries">Inquiries</a></li>
+<li><a href="#loan-amount">Loan Amount</a></li>
+<li><a href="#time-to-delinquency">Time to delinquency</a></li>
+<li><a href="#adjusted-dti">Adjusted dti</a></li>
 </ul>
 </div>
 
@@ -141,93 +150,86 @@ loandata &lt;- readRDS(file=&quot;lc_prosper_merged.rds&quot;)
 
 loandata['default_4months'] &lt;- ifelse(loandata$delinquent_days&gt;120,1,0)
 loandata['loang_age'] &lt;- floor(as.numeric(loandata$data_date-loandata$issued_date)/30)
-
+loandata$open_credit_lines &lt;- as.numeric(loandata$open_credit_lines)
+loandata$interest_rate &lt;- as.numeric(loandata$interest_rate)
+loandata&lt;-na.omit(loandata)
 # city_data &lt;- ddply(loandata,.(state,city),summarise,obs=length(loan_id))
 # saveRDS(city_data,file=&quot;city_data.rds&quot;)
-city_data &lt;- readRDS(file = &quot;city_data.rds&quot;)</code></pre>
+city_data &lt;- readRDS(file = &quot;city_data.rds&quot;)
+loandata &lt;- merge(loandata,city_data,by=c(&quot;state&quot;,&quot;city&quot;))
+loandata &lt;- loandata[!duplicated(loandata),]</code></pre>
 <div id="summary-stats" class="section level1">
 <h1>Summary Stats</h1>
-<pre class="r"><code>stargazer(loandata[loandata$lending_club==1, c(&quot;annual_income&quot;,&quot;credit_history_months&quot;,&quot;dti&quot;,&quot;emp_length&quot;,&quot;fico&quot;,&quot;home_ownership&quot;,&quot;income_verified&quot;,&quot;inq_last_6mths&quot;,&quot;interest_rate&quot;,&quot;loan_amount&quot;,&quot;loan_term&quot;,&quot;pct_funded&quot;,&quot;loang_age&quot;,&quot;default_4months&quot;)], type = output.type, 
-  summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;p25&quot;, &quot;median&quot;, &quot;p75&quot;, &quot;n&quot;),title=&quot;Lending Club Loans&quot;
-)</code></pre>
+<pre class="r"><code>cols &lt;- c(&quot;annual_income&quot;,&quot;credit_history_months&quot;,&quot;dti&quot;,&quot;emp_length&quot;,&quot;fico&quot;,&quot;home_ownership&quot;,&quot;income_verified&quot;,&quot;inq_last_6mths&quot;,&quot;interest_rate&quot;,&quot;loan_amount&quot;,&quot;loan_term&quot;,&quot;pct_funded&quot;,&quot;loang_age&quot;,&quot;default_4months&quot;,&quot;open_credit_lines&quot;)
+
+stargazer(loandata[loandata$lending_club==1, cols], type = output.type, summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;p25&quot;, &quot;median&quot;, &quot;p75&quot;, &quot;n&quot;),title=&quot;Lending Club Loans&quot;)</code></pre>
 <pre><code>## 
 ## Lending Club Loans
 ## ====================================================================================
 ## Statistic                Mean     St. Dev.   Pctl(25)    Median    Pctl(75)     N   
 ## ------------------------------------------------------------------------------------
-## annual_income         72,218.480 55,106.850 45,000.000 62,000.000 87,000.000 267,370
-## credit_history_months  174.283     94.346      118        164        223     285,066
-## dti                     16.565     7.582      10.890     16.300     22.010   267,370
-## emp_length              39.144     30.886       12         24         60     235,465
-## fico                   698.790     31.519      675        690        715     267,368
-## home_ownership          0.591      0.492        0          1          1      267,181
-## income_verified         0.679      0.467        0          1          1      267,370
-## inq_last_6mths          0.816      1.042        0          0          1      267,370
-## loan_amount           13,657.750 8,054.012    7,500      12,000     18,775   285,066
-## loan_term               41.912     10.341       36         36         36     267,370
-## pct_funded              0.998      0.027      1.000      1.000      1.000    285,066
-## loang_age               13.557     13.277       4          9          18     285,066
-## default_4months         0.163      0.369        0          0          0      247,722
+## annual_income         73,763.840 56,508.390 46,000.000 64,000.000 89,000.000 235,305
+## credit_history_months  185.086     82.871      129        170        227     235,305
+## dti                     16.589     7.546      10.950     16.320     22.000   235,305
+## emp_length              39.147     30.887       12         24         60     235,305
+## fico                   698.734     31.386      675        690        715     235,305
+## home_ownership          0.603      0.489        0          1          1      235,305
+## income_verified         0.667      0.471        0          1          1      235,305
+## inq_last_6mths          0.816      1.042        0          0          1      235,305
+## interest_rate           0.140      0.044      0.110      0.137      0.170    235,305
+## loan_amount           14,225.770 8,142.984    8,000      12,000     20,000   235,305
+## loan_term               42.104     10.452       36         36         60     235,305
+## pct_funded              0.998      0.028      1.000      1.000      1.000    235,305
+## loang_age               14.090     13.178       5          10         19     235,305
+## default_4months         0.149      0.356        0          0          0      235,305
+## open_credit_lines       10.905     4.687        8          10         13     235,305
 ## ------------------------------------------------------------------------------------</code></pre>
-<pre class="r"><code>stargazer(loandata[loandata$lending_club==0, c(&quot;annual_income&quot;,&quot;credit_history_months&quot;,&quot;dti&quot;,&quot;emp_length&quot;,&quot;fico&quot;,&quot;home_ownership&quot;,&quot;income_verified&quot;,&quot;inq_last_6mths&quot;,&quot;interest_rate&quot;,&quot;loan_amount&quot;,&quot;loan_term&quot;,&quot;pct_funded&quot;,&quot;loang_age&quot;,&quot;default_4months&quot;)], type = output.type, 
-  summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;p25&quot;, &quot;median&quot;, &quot;p75&quot;, &quot;n&quot;),title=&quot;Prosper Loans&quot;
-)</code></pre>
+<pre class="r"><code>stargazer(loandata[loandata$lending_club==0,cols], type = output.type, summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;p25&quot;, &quot;median&quot;, &quot;p75&quot;, &quot;n&quot;),title=&quot;Prosper Loans&quot;)</code></pre>
 <pre><code>## 
 ## Prosper Loans
 ## =====================================================================================
 ## Statistic                Mean     St. Dev.    Pctl(25)    Median    Pctl(75)     N   
 ## -------------------------------------------------------------------------------------
-## annual_income         71,081.100 296,339.400 40,000.000 60,000.000 85,000.000 183,335
-## credit_history_months  208.820     97.973       142        195        264     182,638
-## dti                     26.656     46.482      15.000     22.000     32.000   168,747
-## emp_length              98.366     95.984        26         69        142     175,709
-## fico                   631.660     74.908       560        650        690     183,209
-## home_ownership          0.494       0.500        0          0          1      183,335
-## income_verified         0.920       0.272        1          1          1      183,335
-## inq_last_6mths          1.309       2.140        0          1          2      182,638
-## loan_amount           9,452.032   6,875.528    4,000      7,500      15,000   183,335
-## loan_term               41.683     11.041        36         36         60     183,335
-## pct_funded              0.998       0.019      1.000      1.000      1.000    183,335
-## loang_age               26.421     28.474        4          16         36     183,335
-## default_4months         0.116       0.320        0          0          0      183,335
+## annual_income         72,333.510 331,322.800 42,000.000 60,000.000 86,000.000 138,408
+## credit_history_months  213.473     96.270       148        201        269     138,408
+## dti                     26.738     40.837        16         23         32     138,408
+## emp_length             101.258     96.516        28         73        146     138,408
+## fico                   645.144     73.902       560        670        710     138,408
+## home_ownership          0.532       0.499        0          1          1      138,408
+## income_verified         0.999       0.034        1          1          1      138,408
+## inq_last_6mths          1.234       1.926        0          1          2      138,408
+## interest_rate           0.178       0.071      0.122      0.166      0.227    138,408
+## loan_amount           10,039.170  7,142.877    4,000      8,500      15,000   138,408
+## loan_term               42.379     11.142        36         36         60     138,408
+## pct_funded              0.999       0.017      1.000      1.000      1.000    138,408
+## loang_age               22.392     26.103        3          10         32     138,408
+## default_4months         0.093       0.290        0          0          0      138,408
+## open_credit_lines       9.762       5.028        6          9          12     138,408
 ## -------------------------------------------------------------------------------------</code></pre>
 </div>
 <div id="matching" class="section level1">
 <h1>Matching</h1>
-<pre class="r"><code># setwd(path)
-loandata &lt;- merge(loandata,city_data,by=c(&quot;state&quot;,&quot;city&quot;))
-loandata &lt;- loandata[loandata$obs&lt;=25,]
-loandata$interest_rate &lt;- as.numeric(loandata$interest_rate)
+<div id="matching-small-cities" class="section level2">
+<h2>Matching Small Cities</h2>
+</div>
+<div id="matching-medium-cities" class="section level2">
+<h2>Matching Medium Cities</h2>
+</div>
+</div>
+<div id="baseline-regression" class="section level1">
+<h1>Baseline Regression</h1>
+<pre class="r"><code>loandata_comb &lt;- loandata[loandata$obs&lt;=500,]
+loandata_comb &lt;- loandata_comb[!duplicated(loandata_comb$loan_id),]
+loandata_comb['stacked'] &lt;- ifelse(loandata_comb$loan_id %in% c(stacked_loans_small$loan_id,stacked_loans_med$loan_id),1,0)
 
-# prosper_loans &lt;- loandata[loandata$lending_club==0,]
-# lc_loans &lt;- loandata[loandata$lending_club==1,]
-# 
-# matched_data &lt;- NULL
-# for(i in 1:nrow(prosper_loans)) {
-#   cat(i, &quot; of &quot;,nrow(prosper_loans),&quot;\n&quot;)
-#   temp &lt;- lc_loans[lc_loans$state== prosper_loans[i,]$state &amp; lc_loans$city==prosper_loans[i,]$city &amp; lc_loans$accepted_date&gt;= prosper_loans[i,]$accepted_date-6 &amp; lc_loans$accepted_date&lt;= prosper_loans[i,]$accepted_date+6 &amp; lc_loans$annual_income &gt;= prosper_loans[i,]$annual_income-5000 &amp; lc_loans$annual_income &lt;= prosper_loans[i,]$annual_income+5000 &amp; lc_loans$emp_length &lt;= prosper_loans[i,]$emp_length+12 &amp; lc_loans$emp_length &gt;= prosper_loans[i,]$emp_length-12,]
-# 
-#   # temp &lt;- lc_loans[lc_loans$state== prosper_loans[i,]$state &amp; lc_loans$city==prosper_loans[i,]$city &amp; lc_loans$accepted_date&gt;= prosper_loans[i,]$accepted_date-1 &amp; lc_loans$accepted_date&lt;= prosper_loans[i,]$accepted_date+1 ,]
-#   temp &lt;- temp[!is.na(temp$city),]
-#   if(nrow(temp)&gt;1) {
-#     temp = temp[which.min(abs(temp$annual_income-prosper_loans[i,]$annual_income)),]
-#   }
-#   if(nrow(temp)==1) matched_data &lt;- rbind(matched_data,rbind(prosper_loans[i,],temp))
-# }
-# saveRDS(matched_data,file = paste(path,&quot;stacked_loans_obs25_income5k_days3.rds&quot;,sep = &quot;&quot;))
-
-# stacked_loans &lt;- readRDS(file = &quot;stacked_loans_obs10_days1_none.rds&quot;)
-stacked_loans &lt;- readRDS(file = paste(path,&quot;stacked_loans_obs25_income5k_days3.rds&quot;,sep = &quot;&quot;))</code></pre>
-<pre class="r"><code>loandata['stacked'] &lt;- ifelse(loandata$loan_id %in% stacked_loans$loan_id,1,0)
-
-def_formula &lt;- as.formula(&quot;default_4months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)&quot;)
-def_formula2 &lt;- as.formula(&quot;default_4months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)&quot;)
+def_formula &lt;- as.formula(&quot;default_4months~factor(stacked)+dti+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)&quot;)
+def_formula2 &lt;- as.formula(&quot;default_4months~factor(stacked)+dti+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(lending_club)&quot;)
 
 
 ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==0,])
-ols[[2]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==1,])
-ols[[3]] &lt;- lm(def_formula2,data = loandata)
+ols[[1]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==0,])
+ols[[2]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==1,])
+ols[[3]] &lt;- lm(def_formula2,data = loandata_comb)
 
 # se &lt;- list()
 # se[[1]] &lt;- sqrt(diag(vcovHAC(ols[[1]])))
@@ -243,40 +245,43 @@ stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 ##                          prosper   lending club    both    
 ##                            (1)         (2)          (3)    
 ## -----------------------------------------------------------
-## factor(stacked)1         0.043*       0.027       0.050**  
-##                          (0.025)     (0.034)      (0.022)  
-## fico                    -0.001***    0.002***    -0.001*** 
-##                         (0.00002)    (0.0001)    (0.00003) 
-## annual_income          -0.00000***   0.00000      -0.000   
-##                          (0.000)    (0.00000)     (0.000)  
-## credit_history_months  -0.0001***   -0.0004***  -0.0002*** 
-##                         (0.00002)   (0.00002)    (0.00001) 
-## emp_length             -0.0001***     0.0001    -0.00004** 
+## factor(stacked)1          0.010      0.060**      0.037**  
+##                          (0.020)     (0.024)      (0.016)  
+## dti                     0.0005***   -0.005***    0.0002*** 
 ##                         (0.00002)    (0.0001)    (0.00002) 
-## factor(home_ownership)  0.015***    -0.018***      0.003   
-##                          (0.003)     (0.004)      (0.003)  
-## interest_rate           0.562***      0.058      0.155***  
-##                          (0.024)     (0.054)      (0.024)  
-## loan_amount            0.00000***  -0.00000***  -0.00000***
+## open_credit_lines       -0.004***   -0.002***    -0.004*** 
+##                         (0.0002)     (0.0002)    (0.0001)  
+## annual_income            -0.000       0.000        0.000   
+##                          (0.000)    (0.00000)     (0.000)  
+## credit_history_months  -0.0002***   -0.0003***  -0.0003*** 
+##                         (0.00001)   (0.00001)    (0.00001) 
+## emp_length             -0.0001***    -0.00004   -0.0001*** 
+##                         (0.00001)   (0.00003)    (0.00001) 
+## factor(home_ownership)  0.016***    -0.008***    0.004***  
+##                          (0.002)     (0.002)      (0.001)  
+## loan_amount            -0.00000*** -0.00000***  -0.00000***
 ##                         (0.00000)   (0.00000)    (0.00000) 
-## loan_term               -0.001***    -0.0003     -0.001*** 
-##                         (0.0001)     (0.0002)    (0.0001)  
-## factor(lending_club)1                            0.084***  
-##                                                   (0.003)  
-## Constant                0.728***    -0.881***    0.488***  
-##                          (0.037)     (0.054)      (0.027)  
+## loan_term               -0.002***   -0.0003***   -0.001*** 
+##                         (0.0001)     (0.0001)    (0.0001)  
+## factor(lending_club)1                            0.064***  
+##                                                   (0.002)  
+## Constant                0.243***     0.357***    0.243***  
+##                          (0.017)     (0.014)      (0.011)  
 ## -----------------------------------------------------------
 ## state                      Yes         Yes          Yes    
 ## -----------------------------------------------------------
-## Observations             33,414       46,703      80,117   
-## Adjusted R2               0.147       0.046        0.041   
+## Observations             108,233     182,934      291,167  
+## Adjusted R2               0.046       0.037        0.034   
 ## ===========================================================
 ## Note:                           *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+</div>
+<div id="matched-regression" class="section level1">
+<h1>Matched Regression</h1>
 <pre class="r"><code>library(zoo)
-loandata['accept_qtr'] &lt;- as.yearqtr(loandata$accepted_date)
-loandata['accept_yr'] &lt;- format(loandata$accepted_date,&quot;%Y&quot;)
-stacked_prosper &lt;- loandata[loandata$stacked==1 &amp; loandata$lending_club==0,]
-unstacked_prosper &lt;- loandata[loandata$stacked==0 &amp; loandata$lending_club==0,]
+loandata_comb['accept_qtr'] &lt;- as.yearqtr(loandata_comb$accepted_date)
+loandata_comb['accept_yr'] &lt;- format(loandata_comb$accepted_date,&quot;%Y&quot;)
+stacked_prosper &lt;- loandata_comb[loandata_comb$stacked==1 &amp; loandata_comb$lending_club==0,]
+unstacked_prosper &lt;- loandata_comb[loandata_comb$stacked==0 &amp; loandata_comb$lending_club==0,]
 
 matched_data &lt;- NULL
 for(i in 1:nrow(stacked_prosper)){
@@ -285,15 +290,17 @@ for(i in 1:nrow(stacked_prosper)){
 #   
 #   # temp &lt;- lc_loans[lc_loans$accepted_date&gt;= prosper_loans[i,]$accepted_date-0 &amp; lc_loans$accepted_date&lt;= prosper_loans[i,]$accepted_date+0 ,]
   temp &lt;- temp[!is.na(temp$city),]
-
+  # if(nrow(temp)&gt;1) {
+  #   temp = temp[which.min(abs(temp$annual_income-stacked_prosper[i,]$annual_income)),]
+  # }
   if(nrow(temp)!=0) matched_data &lt;- rbind(matched_data,rbind(stacked_prosper[i,],temp))
 }
 
 prosper_matched = matched_data
 
 
-stacked_lc &lt;- loandata[loandata$stacked==1 &amp; loandata$lending_club==1,]
-unstacked_lc &lt;- loandata[loandata$stacked==0 &amp; loandata$lending_club==1,]
+stacked_lc &lt;- loandata_comb[loandata_comb$stacked==1 &amp; loandata_comb$lending_club==1,]
+unstacked_lc &lt;- loandata_comb[loandata_comb$stacked==0 &amp; loandata_comb$lending_club==1,]
 
 matched_data &lt;- NULL
 for(i in 1:nrow(stacked_lc)){
@@ -303,6 +310,9 @@ for(i in 1:nrow(stacked_lc)){
 #   # temp &lt;- lc_loans[lc_loans$accepted_date&gt;= prosper_loans[i,]$accepted_date-0 &amp; lc_loans$accepted_date&lt;= prosper_loans[i,]$accepted_date+0 ,]
   temp &lt;- temp[!is.na(temp$city),]
 
+  #  if(nrow(temp)&gt;1) {
+  #   temp = temp[which.min(abs(temp$annual_income-stacked_lc[i,]$annual_income)),]
+  # }
   if(nrow(temp)!=0) matched_data &lt;- rbind(matched_data,rbind(stacked_lc[i,],temp))
 }
 
@@ -322,49 +332,49 @@ ols[[3]] &lt;- lm(def_formula2,data = matched_data)
 stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),title = &quot;Matched Regression&quot;,no.space = TRUE)</code></pre>
 <pre><code>## 
 ## Matched Regression
-## ==========================================================
-##                                Dependent variable:        
-##                        -----------------------------------
-##                                  default_4months          
-##                          prosper   lending club    both   
-##                            (1)         (2)         (3)    
-## ----------------------------------------------------------
-## factor(stacked)1          0.037       0.033       0.053*  
-##                          (0.043)     (0.043)     (0.030)  
-## fico                    -0.002***    0.00003    -0.002*** 
-##                         (0.0003)     (0.001)     (0.0003) 
-## annual_income          -0.00000***   -0.00000   -0.00000**
-##                         (0.00000)   (0.00000)   (0.00000) 
-## credit_history_months   -0.0003*     -0.00000    -0.0003* 
-##                         (0.0002)     (0.0002)    (0.0002) 
-## emp_length               0.0001      0.001**      0.0002  
-##                         (0.0002)     (0.001)     (0.0002) 
-## factor(home_ownership)   0.112**      0.041      0.062**  
-##                          (0.045)     (0.045)     (0.031)  
-## interest_rate            -0.152       0.433       -0.244  
-##                          (0.383)     (0.599)     (0.303)  
-## loan_amount              0.00000     0.00000     0.00000  
-##                         (0.00000)   (0.00000)   (0.00000) 
-## loan_term                 0.001       -0.002     -0.0001  
-##                          (0.002)     (0.002)     (0.001)  
-## factor(lending_club)1                             0.041   
-##                                                  (0.033)  
-## Constant                1.575***      -0.139     1.112*** 
-##                          (0.290)     (0.559)     (0.251)  
-## ----------------------------------------------------------
-## state                      Yes         Yes         Yes    
-## ----------------------------------------------------------
-## Observations               188         292         480    
-## Adjusted R2               0.244       -0.021      0.069   
-## ==========================================================
-## Note:                          *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+## ========================================================
+##                               Dependent variable:       
+##                        ---------------------------------
+##                                 default_4months         
+##                         prosper  lending club    both   
+##                           (1)        (2)         (3)    
+## --------------------------------------------------------
+## factor(stacked)1         0.008     0.059**     0.036**  
+##                         (0.022)    (0.025)     (0.017)  
+## dti                     0.0005      -0.001     -0.0002  
+##                         (0.001)    (0.001)     (0.001)  
+## open_credit_lines      -0.004**     -0.001     -0.002** 
+##                         (0.002)    (0.001)     (0.001)  
+## annual_income          -0.00000    0.00000     0.00000  
+##                        (0.00000)  (0.00000)   (0.00000) 
+## credit_history_months  -0.0002*   -0.0002***  -0.0002***
+##                        (0.0001)    (0.0001)    (0.0001) 
+## emp_length             -0.00004     0.0001      0.0001  
+##                        (0.0001)    (0.0002)    (0.0001) 
+## factor(home_ownership)  0.039**     -0.011     -0.0005  
+##                         (0.017)    (0.013)     (0.010)  
+## loan_amount            -0.00000    -0.00000   -0.00000* 
+##                        (0.00000)  (0.00000)   (0.00000) 
+## loan_term               0.0003      0.001       0.001   
+##                         (0.001)    (0.001)     (0.0005) 
+## factor(lending_club)1                          0.067*** 
+##                                                (0.013)  
+## Constant               0.193***    0.367***    0.196*** 
+##                         (0.064)    (0.089)     (0.068)  
+## --------------------------------------------------------
+## state                     Yes        Yes         Yes    
+## --------------------------------------------------------
+## Observations             1,077      2,792       3,869   
+## Adjusted R2              0.021      0.064       0.051   
+## ========================================================
+## Note:                        *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
 <pre class="r"><code>def_formula &lt;- as.formula(&quot;stacked~annual_income+fico+emp_length+credit_history_months+factor(home_ownership)+factor(state)&quot;)
 def_formula2 &lt;- as.formula(&quot;stacked~annual_income+fico+emp_length+credit_history_months+factor(home_ownership)+factor(state)+factor(lending_club)&quot;)
 
 ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==0,])
-ols[[2]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==1,])
-ols[[3]] &lt;- lm(def_formula2,data = loandata)
+ols[[1]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==0,])
+ols[[2]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==1,])
+ols[[3]] &lt;- lm(def_formula2,data = loandata_comb)
 
 stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),title = &quot;Inq Last 6 Months&quot;,no.space = TRUE)</code></pre>
 <pre><code>## 
@@ -376,34 +386,37 @@ stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 ##                          prosper   lending club    both    
 ##                            (1)         (2)          (3)    
 ## -----------------------------------------------------------
-## annual_income             0.000       0.000        0.000   
+## annual_income             0.000      0.000***      0.000   
 ##                          (0.000)     (0.000)      (0.000)  
-## fico                    0.00001**   0.00002***  0.00001*** 
-##                         (0.00000)   (0.00001)    (0.00000) 
-## emp_length             -0.00002***  0.00003***  -0.00001***
-##                         (0.00000)   (0.00001)    (0.00000) 
-## credit_history_months   -0.00000     -0.00000   -0.00001** 
+## fico                     0.00000    0.00002***  0.00001*** 
 ##                         (0.00000)   (0.00000)    (0.00000) 
-## factor(home_ownership)   -0.0002     -0.0001      -0.0002  
-##                          (0.001)     (0.0005)    (0.0004)  
-## factor(lending_club)1                            -0.003*** 
-##                                                  (0.0005)  
-## Constant                 -0.005     -0.018***     -0.005   
-##                          (0.008)     (0.006)      (0.004)  
+## emp_length             -0.00001***  0.00001***  -0.00001***
+##                         (0.00000)   (0.00000)    (0.00000) 
+## credit_history_months  -0.00000**   -0.00000**  -0.00000***
+##                         (0.00000)   (0.00000)    (0.00000) 
+## factor(home_ownership)   0.0003      -0.0001      0.0001   
+##                         (0.0003)     (0.0002)    (0.0001)  
+## factor(lending_club)1                            -0.002*** 
+##                                                  (0.0002)  
+## Constant                  0.003     -0.012***     -0.001   
+##                          (0.003)     (0.002)      (0.001)  
 ## -----------------------------------------------------------
 ## state                      Yes         Yes          Yes    
 ## -----------------------------------------------------------
-## Observations             33,414       50,751      84,165   
-## Adjusted R2               0.002       0.001        0.002   
+## Observations             108,233     182,934      291,167  
+## Adjusted R2               0.001       0.0005      0.0005   
 ## ===========================================================
 ## Note:                           *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+</div>
+<div id="inquiries" class="section level1">
+<h1>Inquiries</h1>
 <pre class="r"><code>def_formula &lt;- as.formula(&quot;inq_last_6mths~factor(stacked)+factor(state)&quot;)
 def_formula2 &lt;- as.formula(&quot;inq_last_6mths~factor(stacked)+factor(state)+factor(lending_club)&quot;)
 
 ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==0,])
-ols[[2]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==1,])
-ols[[3]] &lt;- lm(def_formula2,data = loandata)
+ols[[1]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==0,])
+ols[[2]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==1,])
+ols[[3]] &lt;- lm(def_formula2,data = loandata_comb)
 
 stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),title = &quot;Inq Last 6 Months&quot;,no.space = TRUE)</code></pre>
 <pre><code>## 
@@ -415,26 +428,29 @@ stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 ##                       prosper  lending club   both   
 ##                         (1)        (2)         (3)   
 ## -----------------------------------------------------
-## factor(stacked)1       0.008      0.025       0.026  
-##                       (0.174)    (0.101)     (0.095) 
-## factor(lending_club)1                       -0.299***
-##                                              (0.010) 
-## Constant              1.357***   0.676***   1.065*** 
-##                       (0.223)    (0.071)     (0.083) 
+## factor(stacked)1       -0.031     0.040       0.011  
+##                       (0.133)    (0.074)     (0.071) 
+## factor(lending_club)1                       -0.402***
+##                                              (0.006) 
+## Constant              1.122***   0.818***   1.191*** 
+##                       (0.113)    (0.040)     (0.046) 
 ## -----------------------------------------------------
 ## state                   Yes        Yes         Yes   
 ## -----------------------------------------------------
-## Observations           34,103     57,508     91,611  
-## Adjusted R2            0.021      0.008       0.018  
+## Observations          108,233    182,934     291,167 
+## Adjusted R2            0.020      0.008       0.022  
 ## =====================================================
 ## Note:                     *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+</div>
+<div id="loan-amount" class="section level1">
+<h1>Loan Amount</h1>
 <pre class="r"><code>def_formula &lt;- as.formula(&quot;loan_amount~factor(stacked)+factor(state)&quot;)
 def_formula2 &lt;- as.formula(&quot;loan_amount~factor(stacked)+factor(state)+factor(lending_club)&quot;)
 
 ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==0,])
-ols[[2]] &lt;- lm(def_formula,data = loandata[loandata$lending_club==1,])
-ols[[3]] &lt;- lm(def_formula2,data = loandata)
+ols[[1]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==0,])
+ols[[2]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==1,])
+ols[[3]] &lt;- lm(def_formula2,data = loandata_comb)
 
 stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),title = &quot;Loan Amount&quot;,no.space = TRUE)</code></pre>
 <pre><code>## 
@@ -446,29 +462,32 @@ stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 ##                          prosper    lending club      both     
 ##                            (1)           (2)           (3)     
 ## ---------------------------------------------------------------
-## factor(stacked)1      3,104.296***  2,959.316***  3,045.267*** 
-##                         (635.015)     (765.872)     (507.689)  
-## factor(lending_club)1                             4,027.507*** 
-##                                                     (52.645)   
-## Constant              11,359.930*** 14,651.580*** 10,791.860***
-##                         (815.246)     (521.039)     (436.630)  
+## factor(stacked)1      2,128.875***  1,886.150***  2,037.832*** 
+##                         (501.700)     (573.590)     (387.751)  
+## factor(lending_club)1                             4,224.991*** 
+##                                                     (30.261)   
+## Constant              11,438.080*** 16,303.600*** 11,892.070***
+##                         (425.633)     (312.180)     (252.096)  
 ## ---------------------------------------------------------------
 ## state                      Yes           Yes           Yes     
 ## ---------------------------------------------------------------
-## Observations             34,120        61,249        95,369    
-## Adjusted R2               0.017         0.006         0.071    
+## Observations             108,233       182,934       291,167   
+## Adjusted R2               0.011         0.004         0.071    
 ## ===============================================================
 ## Note:                               *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
-<pre class="r"><code>loandata['time_to_delinq'] &lt;- as.numeric(loandata$data_date-loandata$delinquent_days-loandata$issued_date)
-loandata['def_in_6_months'] &lt;- ifelse(loandata$default_4months==1 &amp; loandata$time_to_delinq&lt;=190,1,0)
-loandata['def_after_6_months'] &lt;- ifelse(loandata$default_4months==1 &amp; loandata$time_to_delinq&gt;190,1,0)
+</div>
+<div id="time-to-delinquency" class="section level1">
+<h1>Time to delinquency</h1>
+<pre class="r"><code>loandata_comb['time_to_delinq'] &lt;- as.numeric(loandata_comb$data_date-loandata_comb$delinquent_days-loandata_comb$issued_date)
+loandata_comb['def_in_6_months'] &lt;- ifelse(loandata_comb$default_4months==1 &amp; loandata_comb$time_to_delinq&lt;=190,1,0)
+loandata_comb['def_after_6_months'] &lt;- ifelse(loandata_comb$default_4months==1 &amp; loandata_comb$time_to_delinq&gt;190,1,0)
 
-def_formula1 &lt;- as.formula(&quot;def_in_6_months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)&quot;)
-def_formula2 &lt;- as.formula(&quot;def_after_6_months~factor(stacked)+fico+annual_income+credit_history_months+emp_length+factor(home_ownership)+interest_rate+loan_amount+loan_term+factor(state)+factor(lending_club)&quot;)
+def_formula1 &lt;- as.formula(&quot;def_in_6_months~factor(stacked)+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(lending_club)&quot;)
+def_formula2 &lt;- as.formula(&quot;def_after_6_months~factor(stacked)+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(lending_club)&quot;)
 
 ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula1,data = loandata)
-ols[[2]] &lt;- lm(def_formula2,data = loandata)
+ols[[1]] &lt;- lm(def_formula1,data = loandata_comb)
+ols[[2]] &lt;- lm(def_formula2,data = loandata_comb)
 
 
 # se &lt;- list()
@@ -484,35 +503,113 @@ stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 ##                        def_in_6_months def_after_6_months
 ##                              (1)              (2)        
 ## ---------------------------------------------------------
-## factor(stacked)1           0.018*            0.032       
-##                            (0.011)          (0.020)      
-## fico                     -0.00003***       -0.0005***    
-##                           (0.00001)        (0.00002)     
-## annual_income              -0.000            -0.000      
+## factor(stacked)1            0.008           0.030**      
+##                            (0.008)          (0.015)      
+## annual_income               0.000            -0.000      
 ##                            (0.000)          (0.000)      
-## credit_history_months    -0.00003***       -0.0002***    
-##                           (0.00001)        (0.00001)     
-## emp_length               -0.00002**         -0.00002     
-##                           (0.00001)        (0.00001)     
-## factor(home_ownership)     -0.0001           0.003       
-##                            (0.001)          (0.002)      
-## interest_rate             0.190***           -0.034      
-##                            (0.012)          (0.022)      
+## credit_history_months    -0.00005***       -0.0002***    
+##                           (0.00000)        (0.00001)     
+## emp_length               -0.00002***      -0.00004***    
+##                           (0.00000)        (0.00001)     
+## factor(home_ownership)    -0.001**          -0.0001      
+##                            (0.001)          (0.001)      
 ## loan_amount              -0.00000***      -0.00000***    
 ##                           (0.00000)        (0.00000)     
-## loan_term                -0.0002***        -0.001***     
-##                           (0.0001)          (0.0001)     
-## factor(lending_club)1     0.019***          0.065***     
-##                            (0.001)          (0.003)      
-## Constant                    0.018           0.469***     
-##                            (0.013)          (0.024)      
+## loan_term                 0.0001**         -0.001***     
+##                           (0.00003)         (0.0001)     
+## factor(lending_club)1     0.011***          0.046***     
+##                            (0.001)          (0.001)      
+## Constant                  0.028***          0.196***     
+##                            (0.005)          (0.010)      
 ## ---------------------------------------------------------
 ## state                        Yes              Yes        
 ## ---------------------------------------------------------
-## Observations               80,117            80,117      
-## Adjusted R2                 0.009            0.035       
+## Observations               291,167          291,167      
+## Adjusted R2                 0.004            0.027       
 ## =========================================================
 ## Note:                         *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+</div>
+<div id="adjusted-dti" class="section level1">
+<h1>Adjusted dti</h1>
+<pre class="r"><code>stacked &lt;- rbind(stacked_loans_small,stacked_loans_med)
+
+mortgage &lt;- function(P, I, L) { 
+  J &lt;- I/(12 * 100)
+  N &lt;- 1 * L
+  M &lt;- P*J/(1-(1+J)^(-N))
+  return(M)
+}
+
+stacked['payment'] &lt;- mortgage(stacked$loan_amount,stacked$interest_rate*100,stacked$loan_term)
+loandata_comb['payment'] &lt;- mortgage(loandata_comb$loan_amount,loandata_comb$interest_rate*100,loandata_comb$loan_term)
+loandata_comb['payment2'] &lt;- 0
+
+for(i in 1:nrow(stacked)) {
+  cat(i,&quot; &quot;)
+  if(stacked[i,]$lending_club==0) {
+    loandata_comb[loandata_comb$loan_id == stacked[stacked$matched_index== stacked[i,]$matched_index &amp; stacked$lending_club==1,]$loan_id &amp; loandata_comb$lending_club==1,]$payment2 = stacked[i,]$payment
+  }
+  if(stacked[i,]$lending_club==1) {
+        loandata_comb[loandata_comb$loan_id == stacked[stacked$matched_index== stacked[i,]$matched_index &amp; stacked$lending_club==0,]$loan_id &amp; loandata_comb$lending_club==0,]$payment2 = stacked[i,]$payment
+  }
+}</code></pre>
+<pre><code>## 1  2  3  4  5  6  7  8  9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40  41  42  43  44  45  46  47  48  49  50  51  52  53  54  55  56  57  58  59  60  61  62  63  64  65  66  67  68  69  70  71  72  73  74  75  76  77  78  79  80  81  82  83  84  85  86  87  88  89  90  91  92  93  94  95  96  97  98  99  100  101  102  103  104  105  106  107  108  109  110  111  112  113  114  115  116  117  118  119  120  121  122  123  124  125  126  127  128  129  130  131  132  133  134  135  136  137  138  139  140  141  142  143  144  145  146  147  148  149  150  151  152  153  154  155  156  157  158  159  160  161  162  163  164  165  166  167  168  169  170  171  172  173  174  175  176  177  178  179  180  181  182  183  184  185  186  187  188  189  190  191  192  193  194  195  196  197  198  199  200  201  202  203  204  205  206  207  208  209  210  211  212  213  214  215  216  217  218  219  220  221  222  223  224  225  226  227  228  229  230  231  232  233  234  235  236  237  238  239  240  241  242  243  244  245  246  247  248  249  250  251  252  253  254  255  256  257  258  259  260  261  262  263  264  265  266  267  268  269  270  271  272  273  274  275  276  277  278  279  280  281  282  283  284  285  286  287  288  289  290  291  292  293  294  295  296  297  298  299  300  301  302  303  304  305  306  307  308  309  310  311  312  313  314  315  316  317  318  319  320  321  322  323  324  325  326  327  328  329  330  331  332  333  334  335  336  337  338  339  340  341  342  343  344  345  346  347  348  349  350  351  352  353  354  355  356  357  358  359  360  361  362  363  364  365  366  367  368  369  370  371  372  373  374  375  376  377  378  379  380  381  382  383  384  385  386  387  388  389  390  391  392  393  394  395  396  397  398  399  400  401  402  403  404</code></pre>
+<pre class="r"><code>loandata_comb['revised_dti'] &lt;- ((loandata_comb$annual_income/12)*(loandata_comb$dti/100)+loandata_comb$payment2)/(loandata_comb$annual_income/12)
+
+def_formula &lt;- as.formula(&quot;default_4months~factor(stacked)*revised_dti+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)&quot;)
+def_formula2 &lt;- as.formula(&quot;default_4months~factor(stacked)*revised_dti+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(lending_club)&quot;)
+
+
+ols &lt;- list()
+ols[[1]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==0,])
+ols[[2]] &lt;- lm(def_formula,data = loandata_comb[loandata_comb$lending_club==1,])
+ols[[3]] &lt;- lm(def_formula2,data = loandata_comb)
+
+# se &lt;- list()
+# se[[1]] &lt;- sqrt(diag(vcovHAC(ols[[1]])))
+# se[[2]] &lt;- sqrt(diag(vcovHAC(ols[[2]])))
+# se[[3]] &lt;- sqrt(diag(vcovHAC(ols[[3]])))
+
+stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),no.space = TRUE)</code></pre>
+<pre><code>## 
+## =================================================================
+##                                      Dependent variable:         
+##                              ------------------------------------
+##                                        default_4months           
+##                                prosper   lending club    both    
+##                                  (1)         (2)          (3)    
+## -----------------------------------------------------------------
+## factor(stacked)1                0.029       0.050       0.088**  
+##                                (0.050)     (0.063)      (0.038)  
+## revised_dti                   0.048***    -0.488***    0.024***  
+##                                (0.002)     (0.012)      (0.002)  
+## open_credit_lines             -0.004***   -0.002***    -0.004*** 
+##                               (0.0002)     (0.0002)    (0.0001)  
+## annual_income                  -0.000       0.000        0.000   
+##                                (0.000)    (0.00000)     (0.000)  
+## credit_history_months        -0.0002***   -0.0003***  -0.0003*** 
+##                               (0.00001)   (0.00001)    (0.00001) 
+## emp_length                   -0.0001***    -0.00004   -0.0001*** 
+##                               (0.00001)   (0.00003)    (0.00001) 
+## factor(home_ownership)        0.016***    -0.008***    0.004***  
+##                                (0.002)     (0.002)      (0.001)  
+## loan_amount                  -0.00000*** -0.00000***  -0.00000***
+##                               (0.00000)   (0.00000)    (0.00000) 
+## loan_term                     -0.002***   -0.0003***   -0.001*** 
+##                               (0.0001)     (0.0001)    (0.0001)  
+## factor(lending_club)1                                  0.064***  
+##                                                         (0.002)  
+## factor(stacked)1:revised_dti   -0.074       0.195       -0.198   
+##                                (0.146)     (0.269)      (0.130)  
+## Constant                      0.243***     0.357***    0.243***  
+##                                (0.017)     (0.014)      (0.011)  
+## -----------------------------------------------------------------
+## state                            Yes         Yes          Yes    
+## -----------------------------------------------------------------
+## Observations                   108,232     182,934      291,166  
+## Adjusted R2                     0.046       0.037        0.034   
+## =================================================================
+## Note:                                 *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
 </div>
 
 
