@@ -148,6 +148,13 @@ stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit
 ```{r matchedreg}
 setwd(path)
 
+def_formula <- as.formula("default_4months~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
+def_formula2 <- as.formula("default_4months~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+
+cox_formula <- as.formula("Surv(duration,default_4months)~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
+cox_formula2 <- as.formula("Surv(duration,default_4months)~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+
+
 temp <- loandata_comb[loandata_comb$lending_club==0,]
 temp <- temp[!is.na(temp$annual_income) & !is.na(temp$credit_history_months) & !is.na(temp$emp_length) & !is.na(temp$home_ownership) & !is.na(temp$income_verified) & !is.na(temp$inq_last_6mths)& !is.na(temp$loan_term)& !is.na(temp$loan_amount),]
  glm_prop <- glm(stacked~annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+inq_last_6mths+factor(loan_term),data=temp,family = 'binomial')
@@ -162,6 +169,7 @@ propensity <- Matchby(Y=temp$default_4months,Tr=temp$stacked,by=list(temp$state,
 lc_matched <- temp[c(propensity$index.control,propensity$index.treated),]
 
 matched_data = rbind(prosper_matched,lc_matched)
+matched_data <- rbind(matched_data[!duplicated(matched_data$loan_id) & matched_data$stacked==1,],matched_data[matched_data$stacked==0,])
 
 stargazer(matched_data[matched_data$lending_club==1 &matched_data$stacked==0, cols], type = output.type, summary.stat = c("mean", "sd", "median", "n"),title="Lending Club Unstacked Loans")
 
@@ -171,12 +179,12 @@ stargazer(matched_data[matched_data$lending_club==0 &matched_data$stacked==0, co
 
 stargazer(matched_data[matched_data$lending_club==0 &matched_data$stacked==1, cols], type = output.type, summary.stat = c("mean", "sd", "median", "n"),title="Prosper Stacked Loans")
 
-
+matched_data['weight'] <- ifelse(matched_data$stacked==1,1,0.5)
 
 ols <- list()
-ols[[1]] <- lm(def_formula,data = prosper_matched)
-ols[[2]] <- lm(def_formula,data = lc_matched)
-ols[[3]] <- lm(def_formula2,data = matched_data)
+ols[[1]] <- lm(def_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+ols[[2]] <- lm(def_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+ols[[3]] <- lm(def_formula2,data = matched_data,weights = weight)
 
 # se <- list()
 # se[[1]] <- sqrt(diag(vcovHAC(ols[[1]])))
@@ -186,14 +194,28 @@ stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit
 
 
 cox <- list()
-cox[[1]] <- coxph(cox_formula,data = prosper_matched)
-cox[[2]] <- coxph(cox_formula,data = lc_matched)
-cox[[3]] <- coxph(cox_formula2,data = matched_data)
+cox[[1]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+cox[[2]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+cox[[3]] <- coxph(cox_formula2,data = matched_data,weights = weight)
 
 
 stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("ll","logrank","max.rsq","lr","wald"),column.labels = c("prosper","lending club","both"),no.space = TRUE,title="COXPH")
 ```
 
+# Stacked Only
+```{r stackedonly}
+
+cox_formula <- as.formula("Surv(duration,default_4months)~dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
+cox_formula2 <- as.formula("Surv(duration,default_4months)~dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+
+cox <- list()
+cox[[1]] <- coxph(cox_formula,data = loandata_comb[loandata_comb$lending_club==0 & loandata_comb$stacked==1,])
+cox[[2]] <- coxph(cox_formula,data = loandata_comb[loandata_comb$lending_club==1 & loandata_comb$stacked==1,])
+cox[[3]] <- coxph(cox_formula2,data = loandata_comb[loandata_comb$stacked==1,])
+
+
+stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("ll","logrank","max.rsq","lr","wald"),column.labels = c("prosper","lending club","both"),no.space = TRUE,title="COXPH")
+```
 
 # Loan Amount
 ```{r loan_amount}
@@ -201,12 +223,34 @@ def_formula <- as.formula("loan_amount~factor(stacked)+factor(state)")
 def_formula2 <- as.formula("loan_amount~factor(stacked)+factor(state)+factor(lending_club)")
 
 ols <- list()
-ols[[1]] <- lm(def_formula,data = prosper_matched)
-ols[[2]] <- lm(def_formula,data = lc_matched)
-ols[[3]] <- lm(def_formula2,data = matched_data)
+ols[[1]] <- lm(def_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+ols[[2]] <- lm(def_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+ols[[3]] <- lm(def_formula2,data = matched_data,weights = weight)
 
 stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),column.labels = c("prosper","lending club","both"),title = "Loan Amount",no.space = TRUE)
 ```
+
+# Create Loan Month
+```{r createloanmonth}
+df <- list()
+temp = matched_data
+for(i in 1:nrow(temp)) {
+  # cat(i," ")
+  iter = min(temp[i,]$duration,temp[i,]$loan_term)
+  record <- temp[i,]
+  record[1:iter,] <- temp[i,]
+  default = temp[i,]$default_4months
+  record['default_4months']<-0
+  record[iter,]$default_4months = default
+  record['month'] <- seq(1:iter)
+  df[[i]] <-record
+}
+
+matched_loanmonth <- ldply(df,data.frame)
+rm(df)
+```
+
+
 # Time to delinquency
 ```{r deltime}
 matched_data['time_to_delinq'] <- as.numeric(matched_data$data_date-matched_data$delinquent_days-matched_data$issued_date)
@@ -303,3 +347,16 @@ stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit
 
 ```
 
+# Stacked Only, revised
+```{r stackedonly}
+
+cox_formula <- as.formula("Surv(duration,default_4months)~revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
+cox_formula2 <- as.formula("Surv(duration,default_4months)~revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+
+cox <- list()
+cox[[1]] <- coxph(cox_formula,data = loandata[matched_data$lending_club==0 & matched_data$stacked==1,])
+cox[[2]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==1 & matched_data$stacked==1,])
+cox[[3]] <- coxph(cox_formula2,data = matched_data[matched_data$stacked==1,])
+
+
+stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("ll","logrank","max.rsq","lr","wald"),column.labels = c("prosper","lending club","both"),no.space = TRUE,title="COXPH")
