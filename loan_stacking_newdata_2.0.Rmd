@@ -23,6 +23,7 @@ library(data.table)
 library(sandwich)
 library(zoo)
 library(survival)
+library(ggplot2)
 output.type="text"
 # following file was created by the script lc_prosper_merge.R available at https://github.com/dimuthu999/loan_stacking2/blob/master/lc_prosper_merge.R
 loandata <- readRDS(file="lc_prosper_merged_newdata_zip.rds")
@@ -145,7 +146,7 @@ stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit
 
 
 # Matched Regression
-```{r matchedreg}
+```{r matched_data}
 setwd(path)
 
 def_formula <- as.formula("default_4months~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
@@ -181,6 +182,10 @@ stargazer(matched_data[matched_data$lending_club==0 &matched_data$stacked==1, co
 
 matched_data['weight'] <- ifelse(matched_data$stacked==1,1,0.5)
 
+
+```
+
+```{r matchedreg}
 ols <- list()
 ols[[1]] <- lm(def_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
 ols[[2]] <- lm(def_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
@@ -203,7 +208,7 @@ stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit
 ```
 
 # Stacked Only
-```{r stackedonly}
+```{r stackedonly1}
 
 cox_formula <- as.formula("Surv(duration,default_4months)~dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
 cox_formula2 <- as.formula("Surv(duration,default_4months)~dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
@@ -236,6 +241,7 @@ df <- list()
 temp = matched_data
 for(i in 1:nrow(temp)) {
   # cat(i," ")
+  try({
   iter = min(temp[i,]$duration,temp[i,]$loan_term)
   record <- temp[i,]
   record[1:iter,] <- temp[i,]
@@ -244,6 +250,7 @@ for(i in 1:nrow(temp)) {
   record[iter,]$default_4months = default
   record['month'] <- seq(1:iter)
   df[[i]] <-record
+  })
 }
 
 matched_loanmonth <- ldply(df,data.frame)
@@ -253,25 +260,38 @@ rm(df)
 
 # Time to delinquency
 ```{r deltime}
-matched_data['time_to_delinq'] <- as.numeric(matched_data$data_date-matched_data$delinquent_days-matched_data$issued_date)
-matched_data['def_in_6_months'] <- ifelse(matched_data$default_4months==1 & matched_data$time_to_delinq<=190,1,0)
-matched_data['def_after_6_months'] <- ifelse(matched_data$default_4months==1 & matched_data$time_to_delinq>190,1,0)
+logit_formula <- as.formula("default_4months~I(duration)+I(duration^2)+I(duration^3)+I(duration^4)+dti+open_credit_lines+annual_income+interest_rate+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(accepted_year)")
+logit_formula2<- as.formula("default_4months~factor(lending_club)+I(duration)+I(duration^2)+I(duration^3)+I(duration^4)+dti+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(accepted_year)")
+gc()
 
-def_formula1 <- as.formula("def_in_6_months~factor(stacked)+dti+loan_to_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
-def_formula2 <- as.formula("def_after_6_months~factor(stacked)+dti+loan_to_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+logit <- list()
+logit[[1]] = glm(logit_formula,family=binomial(link='logit'),data=matched_loanmonth[matched_loanmonth$stacked==1  & matched_loanmonth$loan_term==36,])
+logit[[2]] = glm(logit_formula,family=binomial(link='logit'),data=matched_loanmonth[matched_loanmonth$stacked==0  & matched_loanmonth$loan_term==36,])
 
-ols <- list()
-ols[[1]] <- lm(def_formula1,data = matched_data)
-ols[[2]] <- lm(def_formula2,data = matched_data)
+stargazer(logit,omit = c("state"),type = output.type,no.space = TRUE)
 
+i=1
+x = (1:36)
+y =  exp((summary(logit[[i]])$coefficients)[2,1] * x +(summary(logit[[i]])$coefficients)[3,1] * x^2 +(summary(logit[[i]])$coefficients)[4,1] * x^3 +(summary(logit[[i]])$coefficients)[5,1] * x^4)
+plot_data <- as.data.frame(cbind(x,y))
+plot_data <- plot_data[1:36,]
 
-# se <- list()
-# se[[1]] <- sqrt(diag(vcovHAC(ols[[1]])))
-# se[[2]] <- sqrt(diag(vcovHAC(ols[[2]])))
-# se[[3]] <- sqrt(diag(vcovHAC(ols[[3]])))
+ggplot(plot_data,aes(x=x,y=y))+geom_point()+
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+labs(x = "Months",y="Hazard")+ theme_bw()
 
-stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("f","rsq","ser"),no.space = TRUE)
+i=2
+x = (1:36)
+y =  exp((summary(logit[[i]])$coefficients)[2,1] * x +(summary(logit[[i]])$coefficients)[3,1] * x^2 +(summary(logit[[i]])$coefficients)[4,1] * x^3 +(summary(logit[[i]])$coefficients)[5,1] * x^4)
+plot_data <- as.data.frame(cbind(x,y))
+plot_data <- plot_data[1:36,]
+
+ggplot(plot_data,aes(x=x,y=y))+geom_point()+
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+labs(x = "Months",y="Hazard")+ theme_bw()
 ```
+
+
 
 # Adjusted dti, credit lines, loan to income
 ```{r dtiadjust}
@@ -290,6 +310,7 @@ matched_data['payment'] <- mortgage(matched_data$loan_amount,matched_data$intere
 matched_data['payment2'] <- 0
 matched_data['revised_credit_lines'] <- 0
 matched_data['revised_loan_amount'] <- 0
+matched_data['competitor_loan_amount'] <- 0
 
 for(i in 1:nrow(stacked)) {
   # cat(i," ")
@@ -310,19 +331,25 @@ for(i in 1:nrow(stacked)) {
 matched_data['revised_dti'] <- ((matched_data$annual_income/12)*(matched_data$dti/100)+matched_data$payment2)/(matched_data$annual_income/12)
 matched_data['revised_credit_lines'] = matched_data$open_credit_lines+matched_data$revised_credit_lines
 matched_data['revised_loan_amount'] = matched_data$loan_amount + matched_data$revised_loan_amount
+matched_data['competitor_loan_amount'] = matched_data$revised_loan_amount
 matched_data['revised_loan_to_income'] = matched_data$revised_loan_amount/matched_data$annual_income
+matched_data['competitor_loan_to_income'] = matched_data$competitor_loan_amount/matched_data$annual_income
 
-def_formula <- as.formula("default_4months~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
-def_formula2 <- as.formula("default_4months~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+temp_ols <- lm(competitor_loan_to_income~loan_to_income,data=matched_data[matched_data$stacked==1,])
+
+matched_data['resid_com_loan_to_income'] <- ifelse(matched_data$stacked==1,matched_data$competitor_loan_to_income-matched_data$loan_to_income*1.469799-0.109176,0)
+
+def_formula <- as.formula("default_4months~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
+def_formula2 <- as.formula("default_4months~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
 
 
 
 
 
 ols <- list()
-ols[[1]] <- lm(def_formula,data = matched_data[matched_data$lending_club==0,])
-ols[[2]] <- lm(def_formula,data = matched_data[matched_data$lending_club==1,])
-ols[[3]] <- lm(def_formula2,data = matched_data)
+ols[[1]] <- lm(def_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+ols[[2]] <- lm(def_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+ols[[3]] <- lm(def_formula2,data = matched_data,weights = weight)
 
 # se <- list()
 # se[[1]] <- sqrt(diag(vcovHAC(ols[[1]])))
@@ -333,30 +360,18 @@ stargazer(ols,type = output.type,omit = c("state"),omit.labels = c("state"),omit
 
 
 
-cox_formula <- as.formula("Surv(duration,default_4months)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
-cox_formula2 <- as.formula("Surv(duration,default_4months)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+cox_formula <- as.formula("Surv(duration,default_4months)~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
+cox_formula2 <- as.formula("Surv(duration,default_4months)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
+cox_formula3 <- as.formula("Surv(duration,default_4months)~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
 
 
 cox <- list()
-cox[[1]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==0,])
-cox[[2]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==1,])
-cox[[3]] <- coxph(cox_formula2,data = matched_data)
+cox[[1]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+cox[[2]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+cox[[3]] <- coxph(cox_formula2,data = matched_data,weights = weight)
+cox[[4]] <- coxph(cox_formula3,data = matched_data,weights = weight)
 
 
 stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("ll","logrank","max.rsq","lr","wald"),column.labels = c("prosper","lending club","both"),no.space = TRUE,title="COXPH")
 
 ```
-
-# Stacked Only, revised
-```{r stackedonly}
-
-cox_formula <- as.formula("Surv(duration,default_4months)~revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
-cox_formula2 <- as.formula("Surv(duration,default_4months)~revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
-
-cox <- list()
-cox[[1]] <- coxph(cox_formula,data = loandata[matched_data$lending_club==0 & matched_data$stacked==1,])
-cox[[2]] <- coxph(cox_formula,data = matched_data[matched_data$lending_club==1 & matched_data$stacked==1,])
-cox[[3]] <- coxph(cox_formula2,data = matched_data[matched_data$stacked==1,])
-
-
-stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("ll","logrank","max.rsq","lr","wald"),column.labels = c("prosper","lending club","both"),no.space = TRUE,title="COXPH")

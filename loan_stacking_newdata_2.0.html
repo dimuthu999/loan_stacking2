@@ -126,7 +126,9 @@ $(document).ready(function () {
 <li><a href="#matching">Matching</a></li>
 <li><a href="#baseline-regression">Baseline Regression</a></li>
 <li><a href="#matched-regression">Matched Regression</a></li>
+<li><a href="#stacked-only">Stacked Only</a></li>
 <li><a href="#loan-amount">Loan Amount</a></li>
+<li><a href="#create-loan-month">Create Loan Month</a></li>
 <li><a href="#time-to-delinquency">Time to delinquency</a></li>
 <li><a href="#adjusted-dti-credit-lines-loan-to-income">Adjusted dti, credit lines, loan to income</a></li>
 </ul>
@@ -143,6 +145,7 @@ library(data.table)
 library(sandwich)
 library(zoo)
 library(survival)
+library(ggplot2)
 output.type=&quot;text&quot;
 # following file was created by the script lc_prosper_merge.R available at https://github.com/dimuthu999/loan_stacking2/blob/master/lc_prosper_merge.R
 loandata &lt;- readRDS(file=&quot;lc_prosper_merged_newdata_zip.rds&quot;)
@@ -326,6 +329,13 @@ stargazer(cox,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 <h1>Matched Regression</h1>
 <pre class="r"><code>setwd(path)
 
+def_formula &lt;- as.formula(&quot;default_4months~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)&quot;)
+def_formula2 &lt;- as.formula(&quot;default_4months~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
+
+cox_formula &lt;- as.formula(&quot;Surv(duration,default_4months)~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)&quot;)
+cox_formula2 &lt;- as.formula(&quot;Surv(duration,default_4months)~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
+
+
 temp &lt;- loandata_comb[loandata_comb$lending_club==0,]
 temp &lt;- temp[!is.na(temp$annual_income) &amp; !is.na(temp$credit_history_months) &amp; !is.na(temp$emp_length) &amp; !is.na(temp$home_ownership) &amp; !is.na(temp$income_verified) &amp; !is.na(temp$inq_last_6mths)&amp; !is.na(temp$loan_term)&amp; !is.na(temp$loan_amount),]
  glm_prop &lt;- glm(stacked~annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+inq_last_6mths+factor(loan_term),data=temp,family = 'binomial')
@@ -340,6 +350,7 @@ propensity &lt;- Matchby(Y=temp$default_4months,Tr=temp$stacked,by=list(temp$sta
 lc_matched &lt;- temp[c(propensity$index.control,propensity$index.treated),]
 
 matched_data = rbind(prosper_matched,lc_matched)
+matched_data &lt;- rbind(matched_data[!duplicated(matched_data$loan_id) &amp; matched_data$stacked==1,],matched_data[matched_data$stacked==0,])
 
 stargazer(matched_data[matched_data$lending_club==1 &amp;matched_data$stacked==0, cols], type = output.type, summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;median&quot;, &quot;n&quot;),title=&quot;Lending Club Unstacked Loans&quot;)</code></pre>
 <pre><code>## 
@@ -347,90 +358,91 @@ stargazer(matched_data[matched_data$lending_club==1 &amp;matched_data$stacked==0
 ## ============================================================
 ## Statistic                Mean     St. Dev.    Median     N  
 ## ------------------------------------------------------------
-## annual_income         76,377.840 56,625.070 65,000.000 1,390
-## credit_history_months  172.147     85.306      162     1,390
-## dti                     17.738     8.503      17.325   1,390
-## emp_length              48.846     37.911       36     1,390
-## home_ownership          0.450      0.498        0      1,390
-## income_verified         0.746      0.435        1      1,390
-## inq_last_6mths          0.784      1.089        0      1,390
-## interest_rate           0.139      0.045      0.137    1,390
-## loan_amount           14,991.890 8,751.350   13,762.5  1,390
-## loan_term               45.358     11.710       36     1,390
+## annual_income         76,556.670 60,117.900 62,000.000 1,390
+## credit_history_months  170.990     83.576     158.5    1,390
+## dti                     17.670     8.420      17.160   1,390
+## emp_length              48.622     38.250       36     1,390
+## home_ownership          0.462      0.499        0      1,390
+## income_verified         0.748      0.434        1      1,390
+## inq_last_6mths          0.727      1.049        0      1,390
+## interest_rate           0.140      0.045      0.137    1,390
+## loan_amount           14,695.360 8,488.258    12,700   1,390
+## loan_term               45.427     11.725       36     1,390
 ## pct_funded              0.999      0.017      1.000    1,390
-## loan_age                27.209     18.286       24     1,390
-## default_4months         0.399      0.490        0      1,390
-## open_credit_lines       11.291     5.537        10     1,390
+## loan_age                27.309     18.262       24     1,390
+## default_4months         0.414      0.493        0      1,390
+## open_credit_lines       11.196     5.418        10     1,390
 ## ------------------------------------------------------------</code></pre>
 <pre class="r"><code>stargazer(matched_data[matched_data$lending_club==1 &amp;matched_data$stacked==1, cols], type = output.type, summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;median&quot;, &quot;n&quot;),title=&quot;Lending Club Stacked Loans&quot;)</code></pre>
 <pre><code>## 
 ## Lending Club Stacked Loans
-## ============================================================
-## Statistic                Mean     St. Dev.    Median     N  
-## ------------------------------------------------------------
-## annual_income         80,737.140 50,884.010 65,000.000 1,390
-## credit_history_months  168.615     82.391      156     1,390
-## dti                     16.116     8.229      15.550   1,390
-## emp_length              48.173     35.969       36     1,390
-## home_ownership          0.464      0.499        0      1,390
-## income_verified         0.748      0.434        1      1,390
-## inq_last_6mths          0.719      1.070        0      1,390
-## interest_rate           0.137      0.046      0.133    1,390
-## loan_amount           16,383.360 9,991.860    14,600   1,390
-## loan_term               44.806     11.571       36     1,390
-## pct_funded              0.999      0.014      1.000    1,390
-## loan_age                27.306     18.281       24     1,390
-## default_4months         0.442      0.497        0      1,390
-## open_credit_lines       10.090     4.590        9      1,390
-## ------------------------------------------------------------</code></pre>
+## ==========================================================
+## Statistic                Mean     St. Dev.    Median    N 
+## ----------------------------------------------------------
+## annual_income         80,737.140 50,957.430 65,000.000 278
+## credit_history_months  168.615     82.509      156     278
+## dti                     16.116     8.241      15.550   278
+## emp_length              48.173     36.021       36     278
+## home_ownership          0.464      0.500        0      278
+## income_verified         0.748      0.435        1      278
+## inq_last_6mths          0.719      1.072        0      278
+## interest_rate           0.137      0.046      0.133    278
+## loan_amount           16,383.360 10,006.280   14,600   278
+## loan_term               44.806     11.588       36     278
+## pct_funded              0.999      0.014      1.000    278
+## loan_age                27.306     18.307       24     278
+## default_4months         0.442      0.498        0      278
+## open_credit_lines       10.090     4.597        9      278
+## ----------------------------------------------------------</code></pre>
 <pre class="r"><code>stargazer(matched_data[matched_data$lending_club==0 &amp;matched_data$stacked==0, cols], type = output.type, summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;median&quot;, &quot;n&quot;),title=&quot;Prosper Unstacked Loans&quot;)</code></pre>
 <pre><code>## 
 ## Prosper Unstacked Loans
 ## ================================================================
 ## Statistic                Mean       St. Dev.      Median     N  
 ## ----------------------------------------------------------------
-## annual_income         66,325.200   40,359.850   56,000.000 1,390
-## credit_history_months   164.112      80.014        155     1,390
+## annual_income         66,891.320   42,752.930   56,538.000 1,390
+## credit_history_months   163.473      78.790        155     1,390
 ## dti                   287,795.000 5,358,620.000     23     1,390
-## emp_length              77.496       80.981         52     1,390
-## fico                     5.524        1.845         5      1,212
-## home_ownership           0.444        0.497         0      1,390
+## emp_length              79.213       84.215         51     1,390
+## fico                     5.519        1.859         5      1,212
+## home_ownership           0.455        0.498         0      1,390
 ## income_verified          0.997        0.054         1      1,390
-## inq_last_6mths           1.093        1.488         1      1,390
-## interest_rate            0.158        0.061       0.148    1,390
-## loan_amount           11,607.820    8,132.196   9,500.000  1,390
-## loan_term               44.788       11.566         36     1,390
+## inq_last_6mths           1.062        1.465         1      1,390
+## interest_rate            0.158        0.062       0.148    1,390
+## loan_amount           11,708.720    8,073.652   10,000.000 1,390
+## loan_term               44.529       11.491         36     1,390
 ## pct_funded               0.998        0.020       1.000    1,390
-## loan_age                26.478       18.568         23     1,390
-## default_4months          0.052        0.222         0      1,390
-## open_credit_lines        9.585        4.588         9      1,390
+## loan_age                26.447       18.607         23     1,390
+## default_4months          0.055        0.229         0      1,390
+## open_credit_lines        9.529        4.494         9      1,390
 ## ----------------------------------------------------------------</code></pre>
 <pre class="r"><code>stargazer(matched_data[matched_data$lending_club==0 &amp;matched_data$stacked==1, cols], type = output.type, summary.stat = c(&quot;mean&quot;, &quot;sd&quot;, &quot;median&quot;, &quot;n&quot;),title=&quot;Prosper Stacked Loans&quot;)</code></pre>
 <pre><code>## 
 ## Prosper Stacked Loans
-## ================================================================
-## Statistic                Mean       St. Dev.      Median     N  
-## ----------------------------------------------------------------
-## annual_income         81,097.660   51,124.230   65,539.000 1,390
-## credit_history_months   169.299      82.537       157.5    1,390
-## dti                   719,447.600 8,454,364.000     22     1,390
-## emp_length              48.122       37.829         35     1,390
-## fico                     5.947        1.898         6      1,215
-## home_ownership           0.464        0.499         0      1,390
-## income_verified          0.993        0.085         1      1,390
-## inq_last_6mths           1.155        1.433         1      1,390
-## interest_rate            0.149        0.056       0.141    1,390
-## loan_amount           13,562.190    9,076.971   11,000.000 1,390
-## loan_term               44.460       11.470         36     1,390
-## pct_funded               0.998        0.023       1.000    1,390
-## loan_age                26.439       18.306         23     1,390
-## default_4months          0.061        0.240         0      1,390
-## open_credit_lines       10.090        4.590         9      1,390
-## ----------------------------------------------------------------</code></pre>
+## ==============================================================
+## Statistic                Mean       St. Dev.      Median    N 
+## --------------------------------------------------------------
+## annual_income         81,097.660   51,198.000   65,539.000 278
+## credit_history_months   169.299      82.656       157.5    278
+## dti                   719,447.600 8,466,563.000     22     278
+## emp_length              48.122       37.883         35     278
+## fico                     5.947        1.901         6      243
+## home_ownership           0.464        0.500         0      278
+## income_verified          0.993        0.085         1      278
+## inq_last_6mths           1.155        1.435         1      278
+## interest_rate            0.149        0.056       0.141    278
+## loan_amount           13,562.190    9,090.069   11,000.000 278
+## loan_term               44.460       11.487         36     278
+## pct_funded               0.998        0.023       1.000    278
+## loan_age                26.439       18.332         23     278
+## default_4months          0.061        0.240         0      278
+## open_credit_lines       10.090        4.597         9      278
+## --------------------------------------------------------------</code></pre>
+<pre class="r"><code>matched_data['weight'] &lt;- ifelse(matched_data$stacked==1,1,0.5)</code></pre>
 <pre class="r"><code>ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula,data = prosper_matched)
-ols[[2]] &lt;- lm(def_formula,data = lc_matched)
-ols[[3]] &lt;- lm(def_formula2,data = matched_data)
+ols[[1]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+ols[[2]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+ols[[3]] &lt;- lm(def_formula2,data = matched_data,weights = weight)
 
 # se &lt;- list()
 # se[[1]] &lt;- sqrt(diag(vcovHAC(ols[[1]])))
@@ -439,52 +451,52 @@ ols[[3]] &lt;- lm(def_formula2,data = matched_data)
 stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),title = &quot;Matched Regression&quot;,no.space = TRUE)</code></pre>
 <pre><code>## 
 ## Matched Regression
-## ===========================================================
-##                                 Dependent variable:        
-##                         -----------------------------------
-##                                   default_4months          
-##                           prosper   lending club    both   
-##                             (1)         (2)         (3)    
-## -----------------------------------------------------------
-## factor(stacked)1          0.019**      0.031*     0.028*** 
-##                           (0.009)     (0.018)     (0.010)  
-## dti                       -0.000     -0.004***     -0.000  
-##                           (0.000)     (0.001)     (0.000)  
-## loan_to_income           0.315***      -0.063      0.060   
-##                           (0.075)     (0.140)     (0.082)  
-## open_credit_lines         -0.001      -0.005**   -0.005*** 
-##                           (0.001)     (0.002)     (0.001)  
-## annual_income             0.00000    -0.00000**   -0.00000 
-##                          (0.00000)   (0.00000)   (0.00000) 
-## credit_history_months   -0.0002***   -0.0005***  -0.0004***
-##                          (0.0001)     (0.0001)    (0.0001) 
-## emp_length                0.0001       0.0003      0.0001  
-##                          (0.0001)     (0.0003)    (0.0001) 
-## factor(home_ownership)    0.025**     0.050**     0.045*** 
-##                           (0.010)     (0.021)     (0.012)  
-## loan_amount             -0.00000***   0.00000     -0.00000 
-##                          (0.00000)   (0.00000)   (0.00000) 
-## factor(income_verified)                0.016       0.010   
-##                                       (0.022)     (0.017)  
-## factor(loan_term)60       -0.017*    -0.056***   -0.036*** 
-##                           (0.010)     (0.021)     (0.011)  
-## inq_last_6mths             0.003      0.053***    0.020*** 
-##                           (0.003)     (0.009)     (0.004)  
-## factor(lending_club)1                             0.380*** 
-##                                                   (0.011)  
-## Constant                  -0.032      0.231**     -0.107** 
-##                           (0.044)     (0.093)     (0.054)  
-## -----------------------------------------------------------
-## state                       Yes         Yes         Yes    
-## -----------------------------------------------------------
-## Observations               2,780       2,780       5,560   
-## Adjusted R2                0.052       0.119       0.234   
-## ===========================================================
-## Note:                           *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+## ==========================================================
+##                                Dependent variable:        
+##                         ----------------------------------
+##                                  default_4months          
+##                          prosper   lending club    both   
+##                            (1)         (2)         (3)    
+## ----------------------------------------------------------
+## factor(stacked)1          0.012       0.017       0.019   
+##                          (0.013)     (0.026)     (0.015)  
+## dti                       -0.000     -0.004**     -0.000  
+##                          (0.000)     (0.002)     (0.000)  
+## loan_to_income           0.208**      -0.132      -0.046  
+##                          (0.093)     (0.173)     (0.099)  
+## open_credit_lines         -0.001      -0.003     -0.003** 
+##                          (0.001)     (0.003)     (0.001)  
+## annual_income            0.00000   -0.00000***  -0.00000**
+##                         (0.00000)   (0.00000)   (0.00000) 
+## credit_history_months    -0.0001    -0.0005***  -0.0003***
+##                          (0.0001)    (0.0002)    (0.0001) 
+## emp_length               -0.00001     0.0002     0.00005  
+##                          (0.0001)    (0.0003)    (0.0001) 
+## factor(home_ownership)    0.019       0.030      0.032**  
+##                          (0.013)     (0.026)     (0.015)  
+## loan_amount             -0.00000**   0.00000     0.00000  
+##                         (0.00000)   (0.00000)   (0.00000) 
+## factor(income_verified)               -0.020      -0.032  
+##                                      (0.028)     (0.022)  
+## factor(loan_term)60       0.009       -0.029      -0.009  
+##                          (0.013)     (0.028)     (0.015)  
+## inq_last_6mths            0.002      0.062***    0.023*** 
+##                          (0.004)     (0.012)     (0.005)  
+## factor(lending_club)1                            0.374*** 
+##                                                  (0.015)  
+## Constant                  -0.027     0.330***     -0.029  
+##                          (0.058)     (0.122)     (0.070)  
+## ----------------------------------------------------------
+## state                      Yes         Yes         Yes    
+## ----------------------------------------------------------
+## Observations              1,668       1,668       3,336   
+## Adjusted R2               0.016       0.093       0.221   
+## ==========================================================
+## Note:                          *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
 <pre class="r"><code>cox &lt;- list()
-cox[[1]] &lt;- coxph(cox_formula,data = prosper_matched)
-cox[[2]] &lt;- coxph(cox_formula,data = lc_matched)
-cox[[3]] &lt;- coxph(cox_formula2,data = matched_data)
+cox[[1]] &lt;- coxph(cox_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+cox[[2]] &lt;- coxph(cox_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+cox[[3]] &lt;- coxph(cox_formula2,data = matched_data,weights = weight)
 
 
 stargazer(cox,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;ll&quot;,&quot;logrank&quot;,&quot;max.rsq&quot;,&quot;lr&quot;,&quot;wald&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),no.space = TRUE,title=&quot;COXPH&quot;)</code></pre>
@@ -497,37 +509,90 @@ stargazer(cox,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 ##                          prosper  lending club   both   
 ##                            (1)        (2)         (3)   
 ## --------------------------------------------------------
-## factor(stacked)1        0.625***    0.204***   0.222*** 
-##                          (0.182)    (0.061)     (0.057) 
-## dti                      -0.000    -0.017***    -0.000  
-##                          (0.000)    (0.004)     (0.000) 
-## loan_to_income          3.351***    1.495***   1.456*** 
-##                          (0.990)    (0.534)     (0.415) 
-## open_credit_lines         0.006      0.005      -0.003  
-##                          (0.022)    (0.007)     (0.006) 
-## annual_income           -0.00001    -0.00000   -0.00000 
-##                         (0.00000)  (0.00000)   (0.00000)
-## credit_history_months   -0.003**    -0.001*    -0.001** 
-##                          (0.001)    (0.0004)   (0.0004) 
-## emp_length              0.004***     0.001     0.002*** 
-##                          (0.001)    (0.001)     (0.001) 
-## factor(home_ownership)    0.303      0.133*     0.146** 
-##                          (0.194)    (0.072)     (0.067) 
-## loan_amount             -0.00002    0.00000     0.00000 
-##                         (0.00002)  (0.00001)   (0.00001)
-## factor(income_verified)              0.079       0.072  
-##                          (0.000)    (0.075)     (0.074) 
-## factor(loan_term)60      -0.305    -0.552***   -0.486***
-##                          (0.192)    (0.076)     (0.069) 
-## inq_last_6mths            0.019     0.089***   0.083*** 
-##                          (0.053)    (0.028)     (0.024) 
-## factor(lending_club)1                          2.742*** 
-##                                                 (0.097) 
+## factor(stacked)1          0.363      0.097       0.131  
+##                          (0.313)    (0.112)     (0.104) 
+## dti                     -0.00000    -0.015**   -0.00000 
+##                         (0.00001)   (0.007)     (0.006) 
+## loan_to_income            2.184      -0.076      0.231  
+##                          (1.428)    (0.960)     (0.828) 
+## open_credit_lines         0.006      0.011       0.005  
+##                          (0.035)    (0.011)     (0.011) 
+## annual_income           -0.00000   -0.00000*   -0.00000 
+##                         (0.00001)  (0.00000)   (0.00000)
+## credit_history_months    -0.001      -0.001     -0.001  
+##                          (0.002)    (0.001)     (0.001) 
+## emp_length                0.001      0.002       0.002  
+##                          (0.002)    (0.002)     (0.001) 
+## factor(home_ownership)    0.144      0.077       0.071  
+##                          (0.304)    (0.118)     (0.109) 
+## loan_amount             -0.00002    0.00002     0.00001 
+##                         (0.00003)  (0.00001)   (0.00001)
+## factor(income_verified)              -0.028     -0.056  
+##                          (0.000)    (0.122)     (0.120) 
+## factor(loan_term)60       0.168    -0.436***   -0.311***
+##                          (0.302)    (0.125)     (0.113) 
+## inq_last_6mths           -0.005      0.084*     0.074*  
+##                          (0.091)    (0.045)     (0.039) 
+## factor(lending_club)1                          2.671*** 
+##                                                 (0.170) 
 ## --------------------------------------------------------
 ## state                      Yes        Yes         Yes   
 ## --------------------------------------------------------
-## Observations              2,780      2,780       5,560  
-## R2                        0.069      0.080       0.260  
+## Observations              1,668      1,668       3,336  
+## R2                        0.027      0.036       0.153  
+## ========================================================
+## Note:                        *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+</div>
+<div id="stacked-only" class="section level1">
+<h1>Stacked Only</h1>
+<pre class="r"><code>cox_formula &lt;- as.formula(&quot;Surv(duration,default_4months)~dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)&quot;)
+cox_formula2 &lt;- as.formula(&quot;Surv(duration,default_4months)~dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
+
+cox &lt;- list()
+cox[[1]] &lt;- coxph(cox_formula,data = loandata_comb[loandata_comb$lending_club==0 &amp; loandata_comb$stacked==1,])
+cox[[2]] &lt;- coxph(cox_formula,data = loandata_comb[loandata_comb$lending_club==1 &amp; loandata_comb$stacked==1,])
+cox[[3]] &lt;- coxph(cox_formula2,data = loandata_comb[loandata_comb$stacked==1,])
+
+
+stargazer(cox,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;ll&quot;,&quot;logrank&quot;,&quot;max.rsq&quot;,&quot;lr&quot;,&quot;wald&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),no.space = TRUE,title=&quot;COXPH&quot;)</code></pre>
+<pre><code>## 
+## COXPH
+## ========================================================
+##                               Dependent variable:       
+##                         --------------------------------
+##                                     duration            
+##                          prosper  lending club   both   
+##                            (1)        (2)         (3)   
+## --------------------------------------------------------
+## dti                                  -0.004    -0.00000 
+##                          (0.000)    (0.016)    (0.00002)
+## loan_to_income          16.111**     3.808*     4.054** 
+##                          (6.896)    (2.001)     (1.786) 
+## open_credit_lines        -0.041      -0.039     -0.027  
+##                          (0.081)    (0.033)     (0.026) 
+## annual_income            0.00002    0.00000     0.00000 
+##                         (0.00001)  (0.00000)   (0.00000)
+## credit_history_months    -0.007     -0.0002     -0.001  
+##                          (0.005)    (0.002)     (0.001) 
+## emp_length                0.007      0.001       0.003  
+##                          (0.008)    (0.003)     (0.003) 
+## factor(home_ownership)    0.713      -0.013      0.063  
+##                          (0.769)    (0.255)     (0.236) 
+## loan_amount             -0.0002*    -0.00000   -0.00001 
+##                         (0.0001)   (0.00002)   (0.00002)
+## factor(income_verified)              -0.256     -0.170  
+##                          (0.000)    (0.268)     (0.255) 
+## factor(loan_term)60      -0.759    -1.009***   -1.027***
+##                          (0.744)    (0.283)     (0.254) 
+## inq_last_6mths            0.162      0.124       0.070  
+##                          (0.235)    (0.107)     (0.090) 
+## factor(lending_club)1                          2.716*** 
+##                                                 (0.300) 
+## --------------------------------------------------------
+## state                      Yes        Yes         Yes   
+## --------------------------------------------------------
+## Observations               278        278         556   
+## R2                        0.170      0.214       0.334  
 ## ========================================================
 ## Note:                        *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
 </div>
@@ -537,94 +602,143 @@ stargazer(cox,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&qu
 def_formula2 &lt;- as.formula(&quot;loan_amount~factor(stacked)+factor(state)+factor(lending_club)&quot;)
 
 ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula,data = prosper_matched)
-ols[[2]] &lt;- lm(def_formula,data = lc_matched)
-ols[[3]] &lt;- lm(def_formula2,data = matched_data)
+ols[[1]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+ols[[2]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+ols[[3]] &lt;- lm(def_formula2,data = matched_data,weights = weight)
 
 stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),title = &quot;Loan Amount&quot;,no.space = TRUE)</code></pre>
 <pre><code>## 
 ## Loan Amount
-## ===============================================================
-##                                  Dependent variable:           
-##                       -----------------------------------------
-##                                      loan_amount               
-##                          prosper    lending club      both     
-##                            (1)           (2)           (3)     
-## ---------------------------------------------------------------
-## factor(stacked)1      1,954.364***  1,391.475***  1,672.919*** 
-##                         (317.665)     (348.690)     (236.247)  
-## factor(lending_club)1                             3,079.345*** 
-##                                                     (236.471)  
-## Constant              10,796.150*** 12,782.600*** 10,249.700***
-##                        (1,537.207)   (1,687.340)   (1,149.316) 
-## ---------------------------------------------------------------
-## state                      Yes           Yes           Yes     
-## ---------------------------------------------------------------
-## Observations              2,780         2,780         5,560    
-## Adjusted R2               0.067         0.047         0.080    
-## ===============================================================
-## Note:                               *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+## ==============================================================
+##                                 Dependent variable:           
+##                       ----------------------------------------
+##                                     loan_amount               
+##                         prosper    lending club      both     
+##                           (1)           (2)           (3)     
+## --------------------------------------------------------------
+## factor(stacked)1      1,853.464*** 1,688.004***  1,770.734*** 
+##                        (448.545)     (482.586)     (328.668)  
+## factor(lending_club)1                            2,930.458*** 
+##                                                    (297.236)  
+## Constant              9,860.915*** 14,239.140*** 10,584.800***
+##                       (1,954.810)   (2,103.169)   (1,440.064) 
+## --------------------------------------------------------------
+## state                     Yes           Yes           Yes     
+## --------------------------------------------------------------
+## Observations             1,668         1,668         3,336    
+## Adjusted R2              0.033         0.016         0.055    
+## ==============================================================
+## Note:                              *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+</div>
+<div id="create-loan-month" class="section level1">
+<h1>Create Loan Month</h1>
+<pre class="r"><code>df &lt;- list()
+temp = matched_data
+for(i in 1:nrow(temp)) {
+  # cat(i,&quot; &quot;)
+  try({
+  iter = min(temp[i,]$duration,temp[i,]$loan_term)
+  record &lt;- temp[i,]
+  record[1:iter,] &lt;- temp[i,]
+  default = temp[i,]$default_4months
+  record['default_4months']&lt;-0
+  record[iter,]$default_4months = default
+  record['month'] &lt;- seq(1:iter)
+  df[[i]] &lt;-record
+  })
+}
+
+matched_loanmonth &lt;- ldply(df,data.frame)
+rm(df)</code></pre>
 </div>
 <div id="time-to-delinquency" class="section level1">
 <h1>Time to delinquency</h1>
-<pre class="r"><code>matched_data['time_to_delinq'] &lt;- as.numeric(matched_data$data_date-matched_data$delinquent_days-matched_data$issued_date)
-matched_data['def_in_6_months'] &lt;- ifelse(matched_data$default_4months==1 &amp; matched_data$time_to_delinq&lt;=190,1,0)
-matched_data['def_after_6_months'] &lt;- ifelse(matched_data$default_4months==1 &amp; matched_data$time_to_delinq&gt;190,1,0)
+<pre class="r"><code>logit_formula &lt;- as.formula(&quot;default_4months~I(duration)+I(duration^2)+I(duration^3)+I(duration^4)+dti+open_credit_lines+annual_income+interest_rate+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(accepted_year)&quot;)
+logit_formula2&lt;- as.formula(&quot;default_4months~factor(lending_club)+I(duration)+I(duration^2)+I(duration^3)+I(duration^4)+dti+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+loan_term+factor(state)+factor(accepted_year)&quot;)
+gc()</code></pre>
+<pre><code>##             used   (Mb) gc trigger   (Mb)  max used   (Mb)
+## Ncells   4854881  259.3    8273852  441.9   8273852  441.9
+## Vcells 134432120 1025.7  372079820 2838.8 581360351 4435.5</code></pre>
+<pre class="r"><code>logit &lt;- list()
+logit[[1]] = glm(logit_formula,family=binomial(link='logit'),data=matched_loanmonth[matched_loanmonth$stacked==1  &amp; matched_loanmonth$loan_term==36,])
+logit[[2]] = glm(logit_formula,family=binomial(link='logit'),data=matched_loanmonth[matched_loanmonth$stacked==0  &amp; matched_loanmonth$loan_term==36,])
 
-def_formula1 &lt;- as.formula(&quot;def_in_6_months~factor(stacked)+dti+loan_to_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
-def_formula2 &lt;- as.formula(&quot;def_after_6_months~factor(stacked)+dti+loan_to_income+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
-
-ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula1,data = matched_data)
-ols[[2]] &lt;- lm(def_formula2,data = matched_data)
-
-
-# se &lt;- list()
-# se[[1]] &lt;- sqrt(diag(vcovHAC(ols[[1]])))
-# se[[2]] &lt;- sqrt(diag(vcovHAC(ols[[2]])))
-# se[[3]] &lt;- sqrt(diag(vcovHAC(ols[[3]])))
-
-stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),no.space = TRUE)</code></pre>
+stargazer(logit,omit = c(&quot;state&quot;),type = output.type,no.space = TRUE)</code></pre>
 <pre><code>## 
-## ==========================================================
-##                                Dependent variable:        
-##                         ----------------------------------
-##                         def_in_6_months def_after_6_months
-##                               (1)              (2)        
-## ----------------------------------------------------------
-## factor(stacked)1           0.016***           0.015       
-##                             (0.005)          (0.010)      
-## dti                          0.000            -0.000      
-##                             (0.000)          (0.000)      
-## loan_to_income               0.042            0.024       
-##                             (0.041)          (0.079)      
-## annual_income              -0.00000          -0.00000     
-##                            (0.00000)        (0.00000)     
-## credit_history_months      -0.0001**        -0.0003***    
-##                            (0.00003)         (0.0001)     
-## emp_length                  0.0001            0.0001      
-##                            (0.0001)          (0.0001)     
-## factor(home_ownership)      0.014**          0.026**      
-##                             (0.006)          (0.011)      
-## loan_amount                -0.00000          0.00000      
-##                            (0.00000)        (0.00000)     
-## factor(income_verified)     0.014*            -0.001      
-##                             (0.008)          (0.016)      
-## factor(loan_term)60         -0.004          -0.032***     
-##                             (0.006)          (0.011)      
-## inq_last_6mths             0.005***          0.013***     
-##                             (0.002)          (0.004)      
-## factor(lending_club)1      0.070***          0.308***     
-##                             (0.006)          (0.011)      
-## Constant                   -0.057**           -0.072      
-##                             (0.027)          (0.052)      
-## ----------------------------------------------------------
-## state                         Yes              Yes        
-## ----------------------------------------------------------
-## Observations                 5,560            5,560       
-## Adjusted R2                  0.048            0.189       
-## ==========================================================
-## Note:                          *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+## ======================================================
+##                               Dependent variable:     
+##                           ----------------------------
+##                                 default_4months       
+##                                 (1)           (2)     
+## ------------------------------------------------------
+## I(duration)                  -0.548***     -0.432***  
+##                               (0.093)       (0.046)   
+## I(duration2)                 0.016***       0.012***  
+##                               (0.004)       (0.002)   
+## I(duration3)                -0.0002***     -0.0002*** 
+##                              (0.0001)      (0.00004)  
+## I(duration4)                 0.00000**     0.00000*** 
+##                              (0.00000)     (0.00000)  
+## dti                           -0.014       -0.024***  
+##                               (0.015)       (0.006)   
+## open_credit_lines              0.035        0.027**   
+##                               (0.036)       (0.012)   
+## annual_income                -0.00000      -0.00000** 
+##                              (0.00000)     (0.00000)  
+## interest_rate                  2.196         1.229    
+##                               (2.672)       (1.147)   
+## credit_history_months         -0.001         0.001*   
+##                               (0.002)       (0.001)   
+## emp_length                    0.010**       -0.003**  
+##                               (0.004)       (0.001)   
+## factor(home_ownership)        -0.215         -0.036   
+##                               (0.377)       (0.127)   
+## loan_amount                   0.00002       0.00001   
+##                              (0.00002)     (0.00001)  
+## loan_term                                             
+##                                                       
+## factor(accepted_year)2010     -1.609         0.351    
+##                               (1.172)       (0.599)   
+## factor(accepted_year)2011     -1.416         -0.371   
+##                               (1.043)       (0.531)   
+## factor(accepted_year)2012    -2.545**        -0.106   
+##                               (1.153)       (0.553)   
+## factor(accepted_year)2013    -2.856***       -0.620   
+##                               (1.102)       (0.540)   
+## factor(accepted_year)2014    -3.376***     -1.442***  
+##                               (1.134)       (0.535)   
+## factor(accepted_year)2015    -4.575***     -2.550***  
+##                               (1.215)       (0.557)   
+## factor(accepted_year)2016    -6.584***     -5.085***  
+##                               (1.308)       (0.613)   
+## Constant                      -13.566       2.557**   
+##                            (13,799.720)     (1.196)   
+## ------------------------------------------------------
+## Observations                   7,001         34,295   
+## Log Likelihood               -406.756      -1,723.616 
+## Akaike Inf. Crit.             927.511      3,565.232  
+## ======================================================
+## Note:                      *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+<pre class="r"><code>i=1
+x = (1:36)
+y =  exp((summary(logit[[i]])$coefficients)[2,1] * x +(summary(logit[[i]])$coefficients)[3,1] * x^2 +(summary(logit[[i]])$coefficients)[4,1] * x^3 +(summary(logit[[i]])$coefficients)[5,1] * x^4)
+plot_data &lt;- as.data.frame(cbind(x,y))
+plot_data &lt;- plot_data[1:36,]
+
+ggplot(plot_data,aes(x=x,y=y))+geom_point()+
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+labs(x = &quot;Months&quot;,y=&quot;Hazard&quot;)+ theme_bw()</code></pre>
+<p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACQAAAASACAMAAACd54JuAAAAaVBMVEUAAAAAADoAAGYAOmYAOpAAZrY6AAA6OgA6OpA6kNtmAABmAGZmOgBmZgBmZmZmtrZmtv9/f3+QOgCQkNuQ29uQ2/+2ZgC2tma225C2///bkDrb///l5eX6+vr/tmb/25D//7b//9v///95M0PzAAAACXBIWXMAAB2HAAAdhwGP5fFlAAAgAElEQVR4nOzda49c14Ft2XShSoB90YCv0CV0qVyUpf//I1uiRL3MycoXudcmx/giKhiZJy1MnFyOOBHx8AMAwBfm4fQPAADwqRlAAMAXxwACAL44BhAA8MUxgACAL44BBAB8cQwgAOCLYwABAF8cAwgA+OIYQADAF8cAAgC+OAYQAPDFMYAAgC+OAQQAfHE+6QD6vwAAJxwdQI++5z8+4k9xt//5n9M/wTDZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjWvPoDePPzoP/5043dfvefGHwyg17Bc13GyKbJpqimqaaopy9W89gD65uGtf/uv//XGt0d/9PdVV1mu6zjZFNk01RTVNNWU5WpeeQB9+/Dw17cP+Pz7f/924zcPf/nPf7nx56M/+hurqyzXdZxsimyaaopqmmrKcjWvO4D++bef9s/bsfP3X2989y9v3u6gPx790d9ZXWW5ruNkU2TTVFNU01RTlqt53QH05t3TXN/87oqfb3955Of7r39eR78/+qO/s7rKcl3HyabIpqmmqKappixX87oD6Jt3z3J9+9sFP+/ZPb8d/dHfWV1lua7jZFNk01RTVNNUU5aredUB9OPW+eWBn9893fXPv/3u6bA/H/3R31pdZbmu42RTZNNUU1TTVFOWq3ntAfTLgz3fffXrAPrpjz/+xR9eBv/wCwPo5ZbrOk42RTZNNUU1TTVluZpXHUDvroH+wwB68/Bv/99Xb+fOb9dA/zqA/gEA8Ml9tAH06/Neb36ZPt9//a9vBOQRoJdbntfHyabIpqmmqKappixX8ykeAfpl+Pz2t78d/dHfWl1lua7jZFNk01RTVNNUU5ar+fjXAL15eHfjt//yTogG0Mst13WcbIpsmmqKappqynI1H+1VYL8+3fXbs2EG0MewXNdxsimyaaopqmmqKcvVfLT3Afp16/z2MngD6GNYrus42RTZNNUU1TTVlOVqPv47Qf/2sNA3//KB8AbQyy3XdZxsimyaaopqmmrKcjWf4LPA3r0p4nveEdEAernluo6TTZFNU01RTVNNWa7mE3wa/C+vf//xHz4N/iNYrus42RTZNNUU1TTVlOVqXnkA/fDNz+9w+PaZsHeT559/+92Nfzz6o7+vuspyXcfJpsimqaaopqmmLFfz2gPo7fse/nKtz2+P+by98T0fiWoAvdxyXcfJpsimqaaopqmmLFfz6gPoaUd/9D3VVZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqv5zAfQT68+e95XXmO5ruOclIpsmmqKappqynI1n/cA+vn9h571pddYrus4J6Uim6aaopqmmrJczWc9gB4evoAFtFzXcU5KRTZNNUU1TTVluZrPeQA9PHwJC2i5ruOclIpsmmqKappqynI1BtDtlus6zkmpyKappqimqaYsV2MA3W65ruOclIpsmmqKappqynI1BtDtlus6zkmpyKappqimqaYsV/M5DyAXQX/xnJSKbJpqimqaaspyNZ/1APIy+C+dk1KRTVNNUU1TTVmu5vMeQN4I8QvnpFRk01RTVNNUU5ar+cwH0Bdgua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslzN4QH0P4/1j0ffE34lG55ONTydam5kAPEZkw1PpxqeTjU38hTY7ZYfXzxONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5mlcfQG8efvQf7/mLb99zqwH0cst1HSebIpummqKappqyXM1rD6BvHt76t//6819895UB9FEs13WcbIpsmmqKappqynI1rzyAvn14+OvbsfPv//3Hv/j+6/c9LmQAvdxyXcfJpsimqaaopqmmLFfzugPon3/7af+8XUB//+PffPveJ8YMoJdbrus42RTZNNUU1TTVlOVqXncAvXn33Nc3f1o7//zbv/0/BtBHsVzXcbIpsmmqKappqinL1bzuAPrm3VNf3/7pKqBvHv7+50309uiP/s7qKst1HSebIpummqKappqyXM2rDqDvv343ct48/OU/f/cXb3683QD6OJbrOk42RTZNNUU1TTVluZrXHkB//flP3331+wH0z7/9+G+/H0APvzCAXm65ruNkU2TTVFNU01RTlqt51QH07hroPw+gb366+b0D6B8AAJ/cRxtAv3sZ2Ju3VwZ5CuzjWJ7Xx8mmyKappqimqaYsV/MJHgH6/uu3fzaAPo7luo6TTZFNU01RTVNNWa7mE1wD9MtnYBhAH8dyXcfJpsimqaaopqmmLFfz0V4F9uvL4L/76uc/GkAfx3Jdx8mmyKappqimqaYsV/PR3gfo18/C+PbhN3/+gAwD6OWW6zpONkU2TTVFNU01Zbmaj/9O0AbQx7Vc13GyKbJpqimqaaopy9V8qs8C8xTYx7Jc13GyKbJpqimqaaopy9V8qk+DN4A+luW6jpNNkU1TTVFNU01ZruaVB9CPM+ett8+Eff/173eQAfRxLNd1nGyKbJpqimqaaspyNa89gH5489P++XnqGECfwnJdx8mmyKappqimqaYsV/PqA+hpR3/0PdVVlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNApZZPEAACAASURBVNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6P0efvSJD/lMy3Ud56RUZNNUU1TTVFOWqzGA3uvh4ZoFtFzXcU5KRTZNNUU1TTVluRoD6H0eHu5ZQMt1HeekVGTTVFNU01RTlqsxgN7j4eGiBbRc13FOSkU2TTVFNU01ZbkaA+g9DKDPhZNSkU1TTVFNU01ZrsYAeg8D6HPhpFRk01RTVNNUU5arMYDewwD6XDgpFdk01RTVNNWU5WoMoPe5aP9M13Wck1KRTVNNUU1TTVmuxgB6r3v2z3RdxzkpFdk01RTVNNWU5WoMoPe7Zv9M13Wck1KRTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNY8eQP/828P7/Nt/vejoj76nuspyXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1Tz5GqA3Dw9/+c+3f/ppEv39hUd/9D3VVZbrOk42RTZNNUU1TTVluZqnDqDvvnr466//8ubdFnr20R99T3WV5bqOk02RTVNNUU1TTVmu5qkD6JuH/8h/e8bRH31PdZXluo6TTZFNU01RTVNNWa7miQPon3/7w7Neb1wDdNxyXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5areeIA+v7rPz0F9u///aKjP/qe6irLdR0nmyKbppqimqaaslzN068B+t1DQN8+uAbouOW6jpNNkU1TTVFNU01ZruYZrwJ797TXT3/0KrDjlus6TjZFNk01RTVNNWW5mie/D9C3f3gfRO8DdNxyXcfJpsimqaaopqmmLFfz9A9DffPb/Hnh4z8G0GtYrus42RTZNNUU1TTVlOVqnvNp8L98KsbLXgD289EffU91leW6jpNNkU1TTVFNU01ZruY5A+gVj/7oe6qrLNd1nGyKbJpqimqaaspyNU9+FdgrPO7zu6M/+p7qKst1HSebIpummqKappqyXM3T3wfoZe/886ejP/qe6irLdR0nmyKbppqimqaaslzN098J+mXv/POnoz/6nuoqy3UdJ5sim6aaopqmmrJcjUeAbrdc13GyKbJpqimqaaopy9U89RqgNy9+758/HP3R91RXWa7rONkU2TTVFNU01ZTlap78KrDvvnrFx4AMoJdbrus42RTZNNUU1TTVlOVqnn4N0B/5NPjTlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GO0Hfbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqXjiA/vl/XAN02HJdx8mmyKappqimqaYsV/P0AfTGRdBTlus6TjZFNk01RTVNNWW5micPoG+8CmzLcl3HyabIpqmmqKappixX89QB9N1XfxxAL/tcDAPo5ZbrOk42RTZNNUU1TTVluZqnDqBvHn76OPhv334m/Dcv/lwwA+jllus6TjZFNk01RTVNNWW5mud9Gvybn5/6+vaFz4AZQK9gua7jZFNk01RTVNNUU5arefo7Qf/1h5+eCPvLf/7wdg55Cuy05bqOk02RTVNNUU1TTVmu5ukD6O+//eOXp8JecPRH31NdZbmu42RTZNNUU1TTVFOWq3neAPr+67cPBP3w3Vc/PSH2gqM/+p7qKst1HSebIpummqKappqyXM3zBtAP3/z80M93X3kZ/GnLdR0nmyKbppqimqaaslzN0y+CfvvQz7dvr4V+dzH084/+6HuqqyzXdZxsimyaaopqmmrKcjVPfRn8Ly/8evPw9iroX3bQ84/+P4/1j0ffE34lG55ONTydam70jDdC/Gn6/PiPH6fPm4eXXgT96J9TXTyDbHg61fB0qrnRsz4K46+/fSKGl8Gftvz44nGyKbJpqimqaaopy9U8eQB9//Xb1fPPv73dPy97AMgAegXLdR0nmyKbppqimqaaslzN0z8N/oc3by//efdQ0MuO/uh7qqss13WcbIpsmmqKappqynI1zxhAr3n0R99TXWW5ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlap73YajvvPTj4A2gl1uu6zjZFNk01RTVNNWU5WqePoB+/8ovA+i85bqOk02RTVNNUU1TTVmu5hkD6Hfv/mwAnbdc13GyKbJpqimqaaopy9U8ZwD9/DEYPzGAzluu6zjZFNk01RTVNNWU5WqePID+8v9+/dsbQBtA5y3XdZxsimyaaopqmmrKcjVPfwTo72/fAvHnC4EMoPOW6zpONkU2TTVFNU01Zbma5wygnz4E9ecLgQyg85brOk42RTZNNUU1TTVluZpnDaCfPgz+7fQxgM5brus42RTZNNUU1TTVlOVqnjeAfr4Y+u8/vDGAjluu6zjZFNk01RTVNNWU5WqeOYDefij8w18NoPOW6zpONkU2TTVFNU01Zbma5w6gn57++okBdNpyXcfJpsimqaaopqmmLFfz/AH09lJoA+i45bqOk02RTVNNUU1TTVmu5gUD6NdLoV9w9EffU11lua7jZFNk01RTVNNUU5aredGnwX//tQF03HJdx8mmyKappqimqaYsV/OiAfTyoz/6nuoqy3UdJ5sim6aaopqmmrJczQsH0D//j0eADluu6zjZFNk01RTVNNWU5WqePoDeXvv8K0+BnbZc13GyKbJpqimqaaopy9U8eQB982AATVmu6zjZFNk01RTVNNWU5WqeOoB+euXX7/39w3f/347+6HuqqyzXdZxsimyaaopqmmrKcjVPHUDfvP0g+G/ffhr8Ny/dPwbQK1iu6zjZFNk01RTVNNWU5WqeOIC+//rtx8D/8hEYL/0sVAPoFSzXdZxsimyaaopqmmrKcjVPfyPEv/7w0xNhf/nPH97OIU+BnbZc13GyKbJpqimqaaopy9U8752g370h9M9Phb3g6I++p7rKcl3HyabIpqmmqKappixX87wB9P3Xbx8I+uG7r356QuwFR3/0PdVVlus6TjZFNk01RTVNNWW5mmd+Ftg3Pz/0891XXgZ/2nJdx8mmyKappqimqaYsV/P0i6DfPvTz7dtrod9dDP38oz/6nuoqy3UdJ5sim6aaopqmmrJczVNfBv/LC7/ePLy9CvqXHfT8oz/6nuoqy3UdJ5sim6aaopqmmrJczTPeCPGn6fPjP36cPm8eXAR93HJdx8mmyKappqimqaYsV/Osj8L462+fiOFl8Kct13WcbIpsmmqKappqynI1Tx5A33/9dvX8829v98/LHgAygF7Bcl3HyabIpqmmqKappixX8/RPg//hzdvLf949FPSyoz/6nuoqy3UdJ5sim6aaopqmmrJczTMG0Gse/dH3VFdZrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslzNowfQLy/7+jPvBH3acl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9U84xqgb3/+HLBXOfqj76muslzXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNT4L7HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV/OMa4Be8+iPvqe6ynJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0B9LoefvRpj7hc13G3ZPPpyaappqimqaYsV2MAvaqHh0++gJbrOu6SbA6QTVNNUU1TTVmuxgB6TQ8Pn34BLdd13B3ZnCCbppqimqaaslyNAfSKHh4OLKDluo67IpsjZNNUU1TTVFOWqzGAXpEBtOaKbI6QTVNNUU1TTVmuxgB6RQbQmiuyOUI2TTVFNU01ZbkaA+gVGUBrrsjmCNk01RTVNNWU5WoMoNfkIugxd2RzgmyaaopqmmrKcjUG0KvyMvgtl2RzgGyaaopqmmrKcjUG0OvyRohTbsnm05NNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1rz6A3jz86D/+dOO377vxBwPoNSzXdZxsimyaaopqmmrKcjWvPYC+eXjr3/7rd7f9828/3/iX//yXoz/6+6qrLNd1nGyKbJpqimqaaspyNa88gL59ePjrDz9899XDv//3r7d9//Xb6fPHG385+qO/sbrKcl3HyabIpqmmqKappixX87oD6J9/+2n/vB07f//1xje/PPTzhxt/Ofqjv7O6ynJdx8mmyKappqimqaYsV/O6A+jNu+e+vvndFT/f/PLIz/df/8tlQAbQyy3XdZxsimyaaopqmmrKcjWvO4DebZ0fvv3dVUC/jqFvDKCPYLmu42RTZNNUU1TTVFOWq3nVAfTbYzxv3nPF87vnx35/9Ed/a3WV5bqOk02RTVNNUU1TTVmu5rUH0C8T57uv/nUA/W4UPfzCAHq55bqOk02RTVNNUU1TTVmu5lUH0G+P8bxnAP34l7++CuzXAfQPAIBP7qMNoD+/4uvHv/vDmwO95RGgl1ue18fJpsimqaaopqmmLFfzqR4B+vGv/vVJMQPoFSzXdZxsimyaaopqmmrKcjWf6Bqgn94M+s9vAvSDAfQalus6TjZFNk01RTVNNWW5mo/2KrA/PN/13Vfve/zHAHoNy3UdJ5sim6aaopqmmrJczUd7H6Dff+xF7R8D6BUs13WcbIpsmmqKappqynI1n+CdoH/aP/96/fPPR3/0d1ZXWa7rONkU2TTVFNU01ZTlaj7BZ4G99/Vfvxz90d9ZXWW5ruNkU2TTVFNU01RTlqv5BJ8G/208//WDAfQalus6TjZFNk01RTVNNWW5mlceQD988/M7HL59yOf7r3/aQT+9AOwdnwX2+pbrOk42RTZNNUU1TTVluZrXHkA/vPlt6Pw8gL77ygD6mJbrOk42RTZNNUU1TTVluZpXH0BPO/qj76muslzXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcyZ//zAAAH4dJREFUbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwCNePjRs75wua7jPvtsnk02TTVFNU01ZbkaA2jDw8NzF9ByXcd97tk8n2yaaopqmmrKcjUG0ISHh2cvoOW6jvvMs3kB2TTVFNU01ZTlagygBQ8Pz19Ay3Ud93ln8xKyaaopqmmqKcvVGEALDKCP5PPO5iVk01RTVNNUU5arMYAWGEAfyeedzUvIpqmmqKappixXYwAtMIA+ks87m5eQTVNNUU1TTVmuxgCa4CLoj+Mzz+YFZNNUU1TTVFOWqzGANngZ/EfxuWfzfLJpqimqaaopy9UYQCO8EeLH8Nln82yyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7m8AD6n8f6x6PvCb+SDU+nGp5ONTcygPiMyYanUw1Pp5obeQrsdsuPLx4nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGECXe/jR6Z9hl2zK8knpNNUU1TTVlOVqDKC7PTxYQB8gm7J8UjpNNUU1TTVluRoD6GoPDxbQh8imLJ+UTlNNUU1TTVmuxgC62cODBfRBsinLJ6XTVFNU01RTlqsxgG5mAP0vZFOWT0qnqaaopqmmLFdjAN3MAPpfyKYsn5ROU01RTVNNWa7GALqZAfS/kE1ZPimdppqimqaaslyNAXQ1++fDZFOWT0qnqaaopqmmLFdjAN3N/vkg2ZTlk9Jpqimqaaopy9UYQJezfz5ENmX5pHSaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbPbeuhx+97k8ySDZl+aR0mmqKappqynI1BtDtnlnXw8OXsIBkU5ZPSqeppqimqaYsV2MA3e55dT08fBELSDZl+aR0mmqKappqynI1BtDtnlXXw8OXsYBkU5ZPSqeppqimqaYsV2MA3c4A+gDZlOWT0mmqKappqinL1RhAtzOAPkA2ZfmkdJpqimqaaspyNQbQ7QygD5BNWT4pnaaaopqmmrJcjQF0OxdBf4BsyvJJ6TTVFNU01ZTlagyg23kZ/AfIpiyflE5TTVFNU01ZrsYAup03QvwA2ZTlk9Jpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdJ6/r4Uef+JDPJpuyfFI6TTVFNU01ZbkaA+h2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" width="1152" /></p>
+<pre class="r"><code>i=2
+x = (1:36)
+y =  exp((summary(logit[[i]])$coefficients)[2,1] * x +(summary(logit[[i]])$coefficients)[3,1] * x^2 +(summary(logit[[i]])$coefficients)[4,1] * x^3 +(summary(logit[[i]])$coefficients)[5,1] * x^4)
+plot_data &lt;- as.data.frame(cbind(x,y))
+plot_data &lt;- plot_data[1:36,]
+
+ggplot(plot_data,aes(x=x,y=y))+geom_point()+
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())+labs(x = &quot;Months&quot;,y=&quot;Hazard&quot;)+ theme_bw()</code></pre>
+<p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACQAAAASACAMAAACd54JuAAAAaVBMVEUAAAAAADoAAGYAOmYAOpAAZrY6AAA6OgA6OpA6kNtmAABmAGZmOgBmZgBmZmZmtrZmtv9/f3+QOgCQkNuQ29uQ2/+2ZgC2tma225C2///bkDrb///l5eX6+vr/tmb/25D//7b//9v///95M0PzAAAACXBIWXMAAB2HAAAdhwGP5fFlAAAgAElEQVR4nOz97Y5cV2JFW6YNW0DVRQPVQlu4lstUSe//kC1S1FcVJ53MTOZemxzjj6RgZBy6MHFyOeJExMNPAABfmYfTfwEAgNdmAAEAXx0DCAD46hhAAMBXxwACAL46BhAA8NUxgACAr44BBAB8dQwgAOCrYwABAF8dAwgA+OoYQADAV8cAAgC+OgYQAPDVedUB9P8FADjh6AB69D3//hn/Fnf73/89/TcYJpsim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmu5gsfQA8/e9pPXmO5ruOclIpsmmqKappqynI1X/YAenj48hfQcl3HOSkV2TTVFNU01ZTlar7oAfTw8BUsoOW6jnNSKrJpqimqaaopy9V8yQPo4eFrWEDLdR3npFRk01RTVNNUU5arMYBut1zXcU5KRTZNNUU1TTVluRoD6HbLdR3npFRk01RTVNNUU5arMYBut1zXcU5KRTZNNUU1TTVluZoveQC5CPqr56RUZNNUU1TTVFOWq/miB5C3wX/tnJSKbJpqimqaaspyNV/2APJBiF85J6Uim6aaopqmmrJczRc+gL4Cy3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVvPgAevPws//8pxt/+OYDN/5kAL2E5bqOk02RTVNNUU1TTVmu5qUH0HcP7/z7f/+fN747+qMfV11lua7jZFNk01RTVNNUU5areeEB9P3Dw1/ePeHzH//z+43fPfzbf/3Ljb8c/dEPrK6yXNdxsimyaaopqmmqKcvVvOwA+sdf3+6fd2Pnb7/d+Ot/vHm3g/589Ec/srrKcl3HyabIpqmmqKappixX87ID6M2vL3N994crfr5//8zPj9/+so7+ePRHP7K6ynJdx8mmyKappqimqaYsV/OyA+i7X1/l+v73C34+sHt+P/qjH1ldZbmu42RTZNNUU1TTVFOWq3nRAfTz1nn/xM8fXu76x1//8HLYPx/90Q+trrJc13GyKbJpqimqaaopy9W89AB6/2TPD9/8NoDe/uvPf/Cnt8E/vGcAPd9yXcfJpsimqaaopqmmLFfzogPo12ug/zSA3jz8+//7zbu58/s10L8NoL8DALy6zzaAfnvd68376fPjt//6QUCeAXq+5Xl9nGyKbJpqimqaaspyNa/xDND74fP7n/5+9Ec/tLrKcl3HyabIpqmmqKappixX8/mvAXrz8OuN3//LJyEaQM+3XNdxsimyaaopqmmqKcvVfLZ3gf32ctfvr4YZQJ/Dcl3HyabIpqmmqKappixX89k+B+i3rfP72+ANoM9hua7jZFNk01RTVNNUU5ar+fyfBP3700Lf/csXwhtAz7dc13GyKbJpqimqaaopy9W8wneB/fqhiB/4REQD6PmW6zpONkU2TTVFNU01ZbmaV/g2+Pfvf//5H74N/jNYrus42RTZNNUU1TTVlOVqXngA/fTdL59w+O6VsF8nzz/++ocb/3z0Rz+uuspyXcfJpsimqaaopqmmLFfz0gPo3ecevr/W5/fnfN7d+IGvRDWAnm+5ruNkU2TTVFNU01RTlqt58QH0aUd/9D3VVZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arOTyA/vex/v7oe8JvZMOnUw2fTjU3MoD4gsmGT6caPp1qbuQlsNstP794nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgD7s4WevfMgnWq7rOCelIpummqKappqyXI0B9EEPD9csoOW6jnNSKrJpqimqaaopy9UYQB/y8HDPAlqu6zgnpSKbppqimqaaslyNAfQBDw8XLaDluo5zUiqyaaopqmmqKcvVGEAfYAB9KZyUimyaaopqmmrKcjUG0AcYQF8KJ6Uim6aaopqmmrJcjQH0AQbQl8JJqcimqaaopqmmLFdjAH3IRftnuq7jnJSKbJpqimqaaspyNQbQB92zf6brOs5JqcimqaaopqmmLFdjAH3YNftnuq7jnJSKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BlNFbPgAACAASURBVNDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqXnwAvXn42X9+4A++/8CtBtDzLdd1nGyKbJpqimqaaspyNS89gL57eOff//uf/+CHbwygz2K5ruNkU2TTVFNU01RTlqt54QH0/cPDX96Nnf/4nz//wY/ffuh5IQPo+ZbrOk42RTZNNUU1TTVluZqXHUD/+Ovb/fNuAf3tz3/y/QdfGDOAnm+5ruNkU2TTVFNU01RTlqt52QH05tfXvr77p7Xzj7/++//HAPoslus6TjZFNk01RTVNNWW5mpcdQN/9+tLX9/90FdB3D3/750307uiPfmR1leW6jpNNkU1TTVFNU01ZruZFB9CP3/46ct48/Nt//eEP3vx8uwH0eSzXdZxsimyaaopqmmrKcjUvPYD+8su//fDNHwfQP/7683/9cQA9vGcAPd9yXcfJpsimqaaopqmmLFfzogPo12ug/3kAfff25g8OoL8DALy6zzaA/vA2sDfvrgzyEtjnsTyvj5NNkU1TTVFNU01ZruYVngH68dt3/24AfR7LdR0nmyKbppqimqaaslzNK1wD9P47MAygz2O5ruNkU2TTVFNU01RTlqv5bO8C++1t8D9888u/GkCfx3Jdx8mmyKappqimqaYsV/PZPgfot+/C+P7hd//8BRkG0PMt13WcbIpsmmqKappqynI1n/+ToA2gz2u5ruNkU2TTVFNU01RTlqt5re8C8xLY57Jc13GyKbJpqimqaaopy9W81rfBG0Cfy3Jdx8mmyKappqimqaYsV/PCA+jnmfPOu1fCfvz2jzvIAPo8lus6TjZFNk01RTVNNWW5mpceQD+9ebt/fpk6BtBrWK7rONkU2TTVFNU01ZTlal58AH3a0R99T3WV5bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWq3n0APrHXx8+5N//+1lHf/Q91VWW6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZruaTrwF68/Dwb//17t/eTqK/PfPoj76nuspyXcfJpsimqaaopqmmLFfzqQPoh28e/vLbf7z5dQs9+eiPvqe6ynJdx8mmyKappqimqaYsV/OpA+i7h//M/3rC0R99T3WV5bqOk02RTVNNUU1TTVmu5hMH0D/++qdXvd64Bui45bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV/OJA+jHb//pJbD/+J9nHf3R91RXWa7rONkU2TTVFNU01ZTlaj79GqA/PAX0/YNrgI5brus42RTZNNUU1TTVlOVqnvAusF9f9nr7r94FdtxyXcfJpsimqaaopqmmLFfzyZ8D9P2fPgfR5wAdt1zXcbIpsmmqKappqinL1Xz6l6G++X3+PPP5HwPoJSzXdZxsimyaaopqmmrKcjVP+Tb499+K8bw3gP1y9EffU11lua7jZFNk01RTVNNUU5arecoAesGjP/qe6irLdR0nmyKbppqimqaaslzNJ78L7AWe9/nD0R99T3WV5bqOk02RTVNNUU1TTVmu5tM/B+h5n/zzT0d/9D3VVZbrOk42RTZNNUU1TTVluZpP/yTo533yzz8d/dH3VFdZrus42RTZNNUU1TTVlOVqPAN0u+W6jpNNkU1TTVFNU01ZruZTrwF68+zP/vnT0R99T3WV5bqOk02RTVNNUU1TTVmu5pPfBfbDNy/4HJAB9HzLdR0nmyKbppqimqaaslzNp18D9Ge+Df605bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqvxSdC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbmaZw6gf/w/rgE6bLmu42RTZNNUU1TTVFOWq/n0AfTGRdBTlus6TjZFNk01RTVNNWW5mk8eQN95F9iW5bqOk02RTVNNUU1TTVmu5lMH0A/f/HkAPe97MQyg51uu6zjZFNk01RTVNNWU5Wo+dQB99/D26+C/f/ed8N89+3vBDKDnW67rONkU2TTVFNU01ZTlap72bfBvfnnp6/tnvgJmAL2A5bqOk02RTVNNUU1TTVmu5tM/CfovP719Iezf/uund3PIS2CnLdd1nGyKbJpqimqaaspyNZ8+gP72+z/evxT2jKM/+p7qKst1HSebIpummqKappqyXM3TBtCP3757IuinH755+4LYM47+6HuqqyzXdZxsimyaaopqmmrKcjVPG0A/fffLUz8/fONt8Kct13WcbIpsmmqKappqynI1n34R9Lunfr5/dy30rxdDP/3oj76nuspyXcfJpsimqaaopqmmLFfzqW+Df//GrzcP766Cfr+Dnn70R99TXWW5ruNkU2TTVFNU01RTlqt5wgchvp0+P//j5+nz5sFF0Mct13WcbIpsmmqKappqynI1T/oqjL/8/o0Y3gZ/2nJdx8mmyKappqimqaYsV/PJA+jHb9+tnn/89d3+ed4TQAbQC1iu6zjZFNk01RTVNNWU5Wo+/dvgf3rz7vKfX58Ket7RH31PdZXluo6TTZFNU01RTVNNWa7mCQPoJY/+6HuqqyzXdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJczdO+DPVXz/06eAPo+ZbrOk42RTZNNUU1TTVluZpPH0B/fOeXAXTecl3HyabIpqmmqKappixX84QB9IdPfzaAzluu6zjZFNk01RTVNNWU5WqeMoB++RqMtwyg85brOk42RTZNNUU1TTVluZpPHkD/9v/79vcPgDaAzluu6zjZFNk01RTVNNWU5Wo+/Rmgv737CMRfLgQygM5brus42RTZNNUU1TTVlOVqnjKA3n4J6i8XAhlA5y3XdZxsimyaaopqmmrKcjVPGkBvvwz+3fQxgM5brus42RTZNNUU1TTVlOVqnjaAfrkY+m8/vTGAjluu6zjZFNk01RTVNNWU5WqeOIDefSn8w18MoPOW6zpONkU2TTVFNU01Zbmapw6gty9/vWUAnbZc13GyKbJpqimqaaopy9U8fQC9uxTaADpuua7jZFNk01RTVNNUU5arecYA+u1S6Gcc/dH3VFdZrus42RTZNNUU1TTVlOVqnvVt8D9+awAdt1zXcbIpsmmqKappqinL1TxrAD3/6I++p7rKcl3HyabIpqmmqKappixX88wB9I//xzNAhy3XdZxsimyaaopqmmrKcjWfPoDeXfv8Gy+BnbZc13GyKbJpqimqaaopy9V88gD67sEAmrJc13GyKbJpqimqaaopy9V86gB6+86vP/rbx+/+fx390fdUV1mu6zjZFNk01RTVNNWU5Wo+dQB99+6L4L9/923w3z13/xhAL2C5ruNkU2TTVFNU01RTlqv5xAH047fvvgb+/VdgPPe7UA2gF7Bc13GyKbJpqimqaaopy9V8+gch/uWnty+E/dt//fRuDnkJ7LTluo6TTZFNU01RTVNNWa7maZ8E/esHQv/yUtgzjv7oe6qrLNd1nGyKbJpqimqaaspyNU8bQD9+++6JoJ9++ObtC2LPOPqj76muslzXcbIpsmmqKappqinL1Tzxu8C+++Wpnx++8Tb405brOk42RTZNNUU1TTVluZpPvwj63VM/37+7FvrXi6GffvRH31NdZbmu42RTZNNUU1TTVFOWq/nUt8G/f+PXm4d3V0G/30FPP/qj76muslzXcbIpsmmqKappqinL1TzhgxDfTp+f//Hz9Hnz4CLo45brOk42RTZNNUU1TTVluZonfRXGX37/Rgxvgz9tua7jZFNk01RTVNNUU5ar+eQB9OO371bPP/76bv887wkgA+gFLNd1nGyKbJpqimqaaspyNZ/+bfA/vXl3+c+vTwU97+iPvqe6ynJdx8mmyKappqimqaYsV/OEAfSSR3/0PdVVlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixX8+gB9P5tX//MJ0H/2dv/TV73iMt1HXdLNq9PNk01RTVNNWW5GgPoRf3yP8qrHnK5ruMuyeYA2TTVFNU01ZTlagygl/Tr/yqveczluo67I5sTZNNUU1TTVFOWq3nCNUDf//I9YC9y9Eff84q6ft+Fr3jQ5bqOuyKbI2TTVFNU01RTlqsxgF6QAbTmimyOkE1TTVFNU01ZrsYAekEG0JorsjlCNk01RTVNNWW5GgPoBRlAa67I5gjZNNUU1TTVlOVqDKCX5CLoMXdkc4JsmmqKappqynI1BtCL8jb4LZdkc4BsmmqKappqynI1hwfQ/z7W3x99z7Pe7p/Tfwd+c0s2LFENn041NzKA+ILJhk+nGj6dam7kJbDbLT+/eJxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcje8Cu91yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1TzhGqCXPPqj76muslzXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagygEQ8/e9IPLtd13BefzZPJpqmmqKappixXYwBteHh46gJaruu4Lz2bp5NNU01RTVNNWa7GAJrw8PDkBbRc13FfeDbPIJummqKappqyXI0BtODh4ekLaLmu477sbJ5DNk01RTVNNWW5GgNogQH0mXzZ2TyHbJpqimqaaspyNQbQAgPoM/mys3kO2TTVFNU01ZTlagygBQbQZ/JlZ/McsmmqKappqinL1RhAE1wE/Xl84dk8g2yaaopqmmrKcjUG0AZvg/8svvRsnk42TTVFNU01ZbkaA2iED0L8HL74bJ5MNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqXnwAvXn7fu7//Kcbv//QjT8ZQC9hua7jZFNk01RTVNNUU5areekB9N0vn+j37//9h9v+8ddfbvy3//qXoz/6cdVVlus6TjZFNk01RTVNNWW5mhceQN8/PPzlp59++ObhP/7nt9t+/Pbd9Pnzje+P/ugHVldZrus42RTZNNUU1TTVlOVqXnYA/eOvb/fPu7Hzt99ufPP+qZ8/3fj+6I9+ZHWV5bqOk02RTVNNUU1TTVmu5mUH0JtfX/v67g9X/Hz3/pmfH7/9l8uADKDnW67rONkU2TTVFNU01ZTlal52AP26dX76/g9XAf02hr4zgD6D5bqOk02RTVNNUU1TTVmu5kUH0O/P8bz5wBXPv74+9sejP/qh1VWW6zpONkU2TTVFNU01Zbmalx5A7yfOD9/86wD6wyh6eM8Aer7luo6TTZFNU01RTVNNWa7mRQfQ78/xfGAA/fyHv70L7LcB9HcAgFf32QbQP7/j6+c/+9OHA73jGaDnW57Xx8mmyKappqimqaYsV/NazwD9/Ef/+qKYAfQClus6TjZFNk01RTVNNWW5mle6Bujth0H/84cA/WQAvYTluo6TTZFNU01RTVNNWa7ms70L7E+vd/3wzYee/zGAXsJyXcfJpsimqaaopqmmLFfz2T4H6I9fe1H7xwB6Act1HSebIpummqKappqyXM0rfBL02/3zr9c//3L0Rz+yuspyXcfJpsimqaaopqmmLFfzCt8F9sH3f70/+qMfWV1lua7jZFNk01RTVNNUU5areYVvg/8+Xv/6yQB6Cct1HSebIpummqKappqyXM0LD6CfvvvlEw7fPeXz47dvd9DbN4D9yneBvbzluo6TTZFNU01RTVNNWa7mpQfQT29+Hzq/DKAfvjGAPqfluo6TTZFNU01RTVNNWa7mxQfQpx390fdUV1mu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0npJMwdAAAH89JREFUmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrcw89O/x12yaYsn5ROU01RTVNNWa7GALrbw4MF9BGyKcsnpdNUU1TTVFOWqzGArvbwYAF9jGzK8knpNNUU1TTVlOVqDKCbPTxYQB8lm7J8UjpNNUU1TTVluRoD6GYG0P9BNmX5pHSaaopqmmrKcjUG0M0MoP+DbMrySek01RTVNNWU5WoMoJsZQP8H2ZTlk9Jpqimqaaopy9UYQFezfz5ONmX5pHSaaopqmmrKcjUG0N3sn4+STVk+KZ2mmqKappqyXI0BdDn752NkU5ZPSqeppqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG731Loefvayf5NBsinLJ6XTVFNU01RTlqsxgG73xLoeHr6GBSSbsnxSOk01RTVNNWW5GgPodk+r6+Hhq1hAsinLJ6XTVFNU01RTlqsxgG73pLoeHr6OBSSbsnxSOk01RTVNNWW5GgPodgbQR8imLJ+UTlNNUU1TTVmuxgC6nQH0EbIpyyel01RTVNNUU5arMYBuZwB9hGzK8knpNNUU1TTVlOVqDKDbuQj6I2RTlk9Kp6mmqKappixXYwDdztvgP0I2ZfmkdJpqimqaaspyNQbQ7XwQ4kfIpiyflE5TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzk8gP73sf7+6HvCb2TDp1MNn041NzKA+ILJhk+nGj6dam7kJbDbLT+/eJxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63avX9fCzVz7kk8mmLJ+UTlNNUU1TTVmuxgC63WvX9fBw0QKSTVk+KZ2mmqKappqyXI0BdLtXruvh4aYFJJuyfFI6TTVFNU01ZbkaA+h2r1vXw8NVC0g2ZfmkdJpqimqaaspyNQbQ7Qygj5BNWT4pnaaaopqmmrJcjQF0OwPoI2RTlk9Kp6mmqKappixXYwDdzgD6CNmU5ZPSaaopqmmqKcvVGEC3cxH0R8imLJ+UTlNNUU1TTVmuxgC6nbfBf4RsyvJJ6TTVFNU01ZTlagyg2/kgxI+QTVk+KZ2mmqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrus42RTZNNUU1TTVlOVqDKDbLdd1nGyKbJpqimqaaspyNQbQ7ZbrOk42RTZNNUU1TTVluRoD6HbLdR0nmyKbppqimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3XdZxsimyaaopqmmrKcjUG0O2W6zpONkU2TTVFNU01ZbkaA+h2y3UdJ5sim6aaopqmmrJcjQF0u+W6jpNNkU1TTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXnzz87LWPKZtyTTYHqKaopqmmLFdjAN1uua4/eng4sIBkU27J5gTVFNU01ZTlagyg2y3X9QcPDycWkGzKJdkcoZqimqaaslyNAXS75bp+9/BwZAHJptyRzRmqKappqinL1RhAt1uu63cG0Jg7sjlDNUU1TTVluRoD6HbLdf3OABpzRzZnqKaopqmmLFdjAN1uua7fGUBj7sjmDNUU1TTVlOVqDKDbLdf1By6C3nJJNkeopqimqaYsV2MA3W65rj/yNvgpt2RzgmqKappqynI1BtDtluv6Ex+EuOSabA5QTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jZFNk01RTVNNUU5arMYBut1zXcbIpsmmqKappqinL1RhAt1uu6zjZFNk01RTVNNWU5WoMoNst13WcbIpsmmqKappqynI1BtDtlus6TjZFNk01RTVNNWW5GgPodst1HSebIpummqKappqyXI0BdLvluo6TTZFNU01RTVNNWa7GALrdcl3HyabIpqmmqKappixXYwDdbrmu42RTZNNUU1TTVFOWqzGAbrdc13GyKbJpqimqaaopy9UYQLdbrutlPONLxGRTvvxsnk41RTVNNWW5GgPodst1vYjnfI28bMoXn80zqKaopqmmLFdjAN1uua6X8PDwjAUkm/KlZ/Mcqimqaaopy9UYQLdbrusFPDw8ZwHJpnzh2TyLaopqmmrKcjUG0O2W63oBBtDn8YVn8yyqKappqinL1RhAt1uu6wUYQJ/HF57Ns6imqKappixXYwDdbrmuF2AAfR5feDbPopqimqaaslyNAXS75bpegougP4svPZvnUE1RTVNNWa7GALrdcl0vwtvgP4cvPptnUE1RTVNNWa7GALrdcl0vwwchfgZffjZPp5qimqaaslyNAXS75bqOk02RTVNNUU1TTVmuxgC63XJdx8mmyKappqimqaYsV2MA3W65ruNkU2TTVFNU01RTlqsxgG63XNdxsimyaaopqmmqKcvVGEC3W67rONkU2TTVFNU01ZTlagyg2y3Xddgz3j72xZNNc7IpqmmqKcvVGEC3W67rrOd8gNAXTzbNyaaopqmmLFdjAN1uua6jnvUR0l882TQnm6KappqyXI0BdLvluk563peIffFk05xsimqaaspyNQbQ7ZbrOskA+ijZNCebopqmmrJcjQF0u+W6TjKAPko2zcmmqKappixXYwDdbrmukwygj5JNc7IpqmmqKcvVGEC3W67rKPvnY2TTnGyKappqynI1BtDtlus6y/75CNk0J5uimqaaslyNAXS75boOs3+abJqTTVFNU01ZrsYAut1yXcfJpsimqaaopqmmLFdjAN1uua7jnpbN1/DMkWyak01RTVNNWa7GALrdcl3HPSmbr+LaIdk0J5uimqaaslyNAXS75bqOe0o2X8e7x2TTnGyKappqynI1BtDtlus67gnZfCWfHySb5mRTVNNUU5arMYBut1zXcQZQkU1zsimqaaopy9UYQLdbrus4A6jIpjnZFNU01ZTlagyg2y3XdZwBVGTTnGyKappqynI1BtDtlus6zkXQRTbNyaaopqmmLFdjAN1uua7jXvlt8BftJtk0J5uimqaa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" width="1152" /></p>
 </div>
 <div id="adjusted-dti-credit-lines-loan-to-income" class="section level1">
 <h1>Adjusted dti, credit lines, loan to income</h1>
@@ -642,6 +756,7 @@ matched_data['payment'] &lt;- mortgage(matched_data$loan_amount,matched_data$int
 matched_data['payment2'] &lt;- 0
 matched_data['revised_credit_lines'] &lt;- 0
 matched_data['revised_loan_amount'] &lt;- 0
+matched_data['competitor_loan_amount'] &lt;- 0
 
 for(i in 1:nrow(stacked)) {
   # cat(i,&quot; &quot;)
@@ -662,19 +777,25 @@ for(i in 1:nrow(stacked)) {
 matched_data['revised_dti'] &lt;- ((matched_data$annual_income/12)*(matched_data$dti/100)+matched_data$payment2)/(matched_data$annual_income/12)
 matched_data['revised_credit_lines'] = matched_data$open_credit_lines+matched_data$revised_credit_lines
 matched_data['revised_loan_amount'] = matched_data$loan_amount + matched_data$revised_loan_amount
+matched_data['competitor_loan_amount'] = matched_data$revised_loan_amount
 matched_data['revised_loan_to_income'] = matched_data$revised_loan_amount/matched_data$annual_income
+matched_data['competitor_loan_to_income'] = matched_data$competitor_loan_amount/matched_data$annual_income
 
-def_formula &lt;- as.formula(&quot;default_4months~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)&quot;)
-def_formula2 &lt;- as.formula(&quot;default_4months~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
+temp_ols &lt;- lm(competitor_loan_to_income~loan_to_income,data=matched_data[matched_data$stacked==1,])
+
+matched_data['resid_com_loan_to_income'] &lt;- ifelse(matched_data$stacked==1,matched_data$competitor_loan_to_income-matched_data$loan_to_income*1.469799-0.109176,0)
+
+def_formula &lt;- as.formula(&quot;default_4months~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)&quot;)
+def_formula2 &lt;- as.formula(&quot;default_4months~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
 
 
 
 
 
 ols &lt;- list()
-ols[[1]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==0,])
-ols[[2]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==1,])
-ols[[3]] &lt;- lm(def_formula2,data = matched_data)
+ols[[1]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+ols[[2]] &lt;- lm(def_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+ols[[3]] &lt;- lm(def_formula2,data = matched_data,weights = weight)
 
 # se &lt;- list()
 # se[[1]] &lt;- sqrt(diag(vcovHAC(ols[[1]])))
@@ -683,101 +804,107 @@ ols[[3]] &lt;- lm(def_formula2,data = matched_data)
 
 stargazer(ols,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;f&quot;,&quot;rsq&quot;,&quot;ser&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),no.space = TRUE)</code></pre>
 <pre><code>## 
-## ===========================================================
-##                                 Dependent variable:        
-##                         -----------------------------------
-##                                   default_4months          
-##                           prosper   lending club    both   
-##                             (1)         (2)         (3)    
-## -----------------------------------------------------------
-## factor(stacked)1         -0.032**     0.047**      0.014   
-##                           (0.013)     (0.024)     (0.014)  
-## revised_dti               -0.000     -0.319***    -0.00000 
-##                          (0.00000)    (0.123)    (0.00000) 
-## revised_loan_to_income   0.219***      0.065       0.091*  
-##                           (0.045)     (0.092)     (0.050)  
-## revised_credit_lines      -0.001     -0.006***   -0.005*** 
-##                           (0.001)     (0.002)     (0.001)  
-## annual_income             0.00000     -0.00000    -0.00000 
-##                          (0.00000)   (0.00000)   (0.00000) 
-## credit_history_months   -0.0002***   -0.0005***  -0.0004***
-##                          (0.0001)     (0.0001)    (0.0001) 
-## emp_length                0.0001       0.0003      0.0001  
-##                          (0.0001)     (0.0003)    (0.0001) 
-## factor(home_ownership)    0.023**     0.052**     0.045*** 
-##                           (0.010)     (0.021)     (0.012)  
-## loan_amount             -0.00000***   0.00000     -0.00000 
-##                          (0.00000)   (0.00000)   (0.00000) 
-## factor(income_verified)                0.016       0.010   
-##                                       (0.022)     (0.017)  
-## factor(loan_term)60       -0.017*    -0.062***   -0.036*** 
-##                           (0.009)     (0.021)     (0.011)  
-## inq_last_6mths             0.004      0.055***    0.021*** 
-##                           (0.003)     (0.009)     (0.004)  
-## factor(lending_club)1                             0.382*** 
-##                                                   (0.011)  
-## Constant                  -0.014      0.196**     -0.114** 
-##                           (0.043)     (0.091)     (0.053)  
-## -----------------------------------------------------------
-## state                       Yes         Yes         Yes    
-## -----------------------------------------------------------
-## Observations               2,780       2,780       5,560   
-## Adjusted R2                0.054       0.117       0.234   
-## ===========================================================
-## Note:                           *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
-<pre class="r"><code>cox_formula &lt;- as.formula(&quot;Surv(duration,default_4months)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)&quot;)
-cox_formula2 &lt;- as.formula(&quot;Surv(duration,default_4months)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
+## ==========================================================
+##                                 Dependent variable:       
+##                          ---------------------------------
+##                                   default_4months         
+##                           prosper  lending club    both   
+##                             (1)        (2)         (3)    
+## ----------------------------------------------------------
+## factor(stacked)1           0.005     0.057**      0.022   
+##                           (0.013)    (0.028)     (0.015)  
+## revised_dti              -0.00000    -0.325**    -0.00000 
+##                          (0.00000)   (0.158)    (0.00000) 
+## loan_to_income             0.048      0.033       -0.043  
+##                           (0.054)    (0.122)     (0.099)  
+## resid_com_loan_to_income   0.143      0.392       0.183   
+##                           (0.108)    (0.252)     (0.125)  
+## revised_credit_lines      -0.001      -0.003     -0.003** 
+##                           (0.001)    (0.003)     (0.001)  
+## annual_income            -0.00000   -0.00000**  -0.00000**
+##                          (0.00000)  (0.00000)   (0.00000) 
+## credit_history_months     -0.0001   -0.0005***  -0.0003***
+##                          (0.0001)    (0.0002)    (0.0001) 
+## emp_length               -0.00002     0.0002      0.0001  
+##                          (0.0001)    (0.0003)    (0.0001) 
+## factor(home_ownership)     0.017      0.035      0.031**  
+##                           (0.013)    (0.026)     (0.015)  
+## loan_amount                                      0.00000  
+##                                                 (0.00000) 
+## factor(income_verified)               -0.018      -0.033  
+##                                      (0.028)     (0.022)  
+## factor(loan_term)60        0.006      -0.025      -0.009  
+##                           (0.013)    (0.027)     (0.015)  
+## inq_last_6mths             0.002     0.062***    0.024*** 
+##                           (0.004)    (0.012)     (0.005)  
+## factor(lending_club)1                            0.377*** 
+##                                                  (0.015)  
+## Constant                  -0.002     0.290**      -0.031  
+##                           (0.057)    (0.120)     (0.070)  
+## ----------------------------------------------------------
+## state                       Yes        Yes         Yes    
+## ----------------------------------------------------------
+## Observations               1,668      1,668       3,336   
+## Adjusted R2                0.014      0.092       0.221   
+## ==========================================================
+## Note:                          *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+<pre class="r"><code>cox_formula &lt;- as.formula(&quot;Surv(duration,default_4months)~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)&quot;)
+cox_formula2 &lt;- as.formula(&quot;Surv(duration,default_4months)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
+cox_formula3 &lt;- as.formula(&quot;Surv(duration,default_4months)~factor(stacked)+revised_dti+loan_to_income+resid_com_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)&quot;)
 
 
 cox &lt;- list()
-cox[[1]] &lt;- coxph(cox_formula,data = matched_data[matched_data$lending_club==0,])
-cox[[2]] &lt;- coxph(cox_formula,data = matched_data[matched_data$lending_club==1,])
-cox[[3]] &lt;- coxph(cox_formula2,data = matched_data)
+cox[[1]] &lt;- coxph(cox_formula,data = matched_data[matched_data$lending_club==0,],weights = weight)
+cox[[2]] &lt;- coxph(cox_formula,data = matched_data[matched_data$lending_club==1,],weights = weight)
+cox[[3]] &lt;- coxph(cox_formula2,data = matched_data,weights = weight)
+cox[[4]] &lt;- coxph(cox_formula3,data = matched_data,weights = weight)
 
 
 stargazer(cox,type = output.type,omit = c(&quot;state&quot;),omit.labels = c(&quot;state&quot;),omit.stat = c(&quot;ll&quot;,&quot;logrank&quot;,&quot;max.rsq&quot;,&quot;lr&quot;,&quot;wald&quot;),column.labels = c(&quot;prosper&quot;,&quot;lending club&quot;,&quot;both&quot;),no.space = TRUE,title=&quot;COXPH&quot;)</code></pre>
 <pre><code>## 
 ## COXPH
-## =========================================================
-##                                Dependent variable:       
-##                         ---------------------------------
-##                                     duration             
-##                          prosper   lending club   both   
-##                            (1)         (2)         (3)   
-## ---------------------------------------------------------
-## factor(stacked)1          -0.378      -0.087    -0.142** 
-##                          (0.262)     (0.079)     (0.072) 
-## revised_dti              -0.00000   -1.212***   -0.00000 
-##                         (0.00000)    (0.436)    (0.00000)
-## revised_loan_to_income   3.886***    2.162***   2.065*** 
-##                          (0.773)     (0.322)     (0.253) 
-## revised_credit_lines      0.0004      0.003      -0.003  
-##                          (0.022)     (0.007)     (0.006) 
-## annual_income            0.00000     0.00000     0.00000 
-##                         (0.00000)   (0.00000)   (0.00000)
-## credit_history_months    -0.003**    -0.001**   -0.001** 
-##                          (0.001)     (0.0004)   (0.0004) 
-## emp_length               0.003***     0.001      0.002** 
-##                          (0.001)     (0.001)     (0.001) 
-## factor(home_ownership)    0.236      0.161**     0.165** 
-##                          (0.193)     (0.072)     (0.067) 
-## loan_amount             -0.00005**   -0.00001   -0.00001*
-##                         (0.00002)   (0.00001)   (0.00001)
-## factor(income_verified)               0.059       0.052  
-##                          (0.000)     (0.075)     (0.074) 
-## factor(loan_term)60       -0.267    -0.598***   -0.514***
-##                          (0.191)     (0.076)     (0.069) 
-## inq_last_6mths            0.022      0.100***   0.087*** 
-##                          (0.052)     (0.027)     (0.024) 
-## factor(lending_club)1                           2.815*** 
-##                                                  (0.098) 
-## ---------------------------------------------------------
-## state                      Yes         Yes         Yes   
-## ---------------------------------------------------------
-## Observations              2,780       2,780       5,560  
-## R2                        0.073       0.087       0.266  
-## =========================================================
-## Note:                         *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+## ===================================================================
+##                                     Dependent variable:            
+##                          ------------------------------------------
+##                                           duration                 
+##                           prosper  lending club   both             
+##                             (1)        (2)         (3)       (4)   
+## -------------------------------------------------------------------
+## factor(stacked)1           0.143     0.288**     -0.081    0.214** 
+##                           (0.353)    (0.124)     (0.124)   (0.104) 
+## revised_dti              -0.00001     -1.140    -0.00005  -0.00002 
+##                           (0.001)    (0.712)     (0.475)   (0.003) 
+## loan_to_income             1.612      1.010*               0.840*  
+##                           (1.042)    (0.539)               (0.470) 
+## resid_com_loan_to_income   3.606     3.355***             3.141*** 
+##                           (2.527)    (1.214)               (1.000) 
+## revised_loan_to_income                          1.209***           
+##                                                  (0.406)           
+## revised_credit_lines       0.005      0.012       0.006     0.006  
+##                           (0.035)    (0.011)     (0.010)   (0.010) 
+## annual_income            -0.00000    -0.00000   -0.00000  -0.00000 
+##                          (0.00000)  (0.00000)   (0.00000) (0.00000)
+## credit_history_months     -0.001      -0.001     -0.001    -0.001  
+##                           (0.002)    (0.001)     (0.001)   (0.001) 
+## emp_length                 0.001      0.002       0.002     0.002  
+##                           (0.002)    (0.002)     (0.001)   (0.001) 
+## factor(home_ownership)     0.107      0.092       0.075     0.078  
+##                           (0.304)    (0.118)     (0.108)   (0.109) 
+## factor(income_verified)               -0.026     -0.072    -0.059  
+##                           (0.000)    (0.121)     (0.119)   (0.119) 
+## factor(loan_term)60        0.145    -0.426***   -0.343*** -0.301***
+##                           (0.300)    (0.125)     (0.112)   (0.112) 
+## inq_last_6mths            -0.002     0.090**     0.080**   0.076*  
+##                           (0.090)    (0.045)     (0.039)   (0.039) 
+## factor(lending_club)1                           2.689***  2.754*** 
+##                                                  (0.169)   (0.165) 
+## -------------------------------------------------------------------
+## state                       Yes        Yes         Yes       Yes   
+## -------------------------------------------------------------------
+## Observations               1,668      1,668       3,336     3,336  
+## R2                         0.027      0.038       0.154     0.155  
+## ===================================================================
+## Note:                                   *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
 </div>
 
 
