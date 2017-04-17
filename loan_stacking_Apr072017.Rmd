@@ -26,13 +26,13 @@ library(survival)
 library(lubridate)
 output.type="text"
 
-loandata <- readRDS(file="cleand_old_data_Apr72017.rds")
+loandata <- readRDS(file="cleand_old_data_Apr102017.rds")
 ```
 
 # Main Regression
 ```{r main_reg}
-cox_formula <- as.formula("Surv(months,default)~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(state)")
-cox_formula2 <- as.formula("Surv(months,default)~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(lending_club)+factor(state)")
+cox_formula <- as.formula("Surv(months,default)~factor(stacked)+dti+fico+interest_rate+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(state)")
+cox_formula2 <- as.formula("Surv(months,default)~factor(stacked)+dti+fico+interest_rate+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(lending_club)+factor(state)")
 
 cox <- list()
 cox[[1]] <- coxph(cox_formula2,data = loandata)
@@ -63,7 +63,7 @@ stargazer(cox,type = output.type,omit = c("state","accepted_year"),omit.labels =
 ```{r fraud1}
 loandata['fraud'] <- ifelse(loandata$months <=6  & loandata$default==1,1,0)
 
-lm_1 <- as.formula("fraud~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(state)")
+lm_1 <- as.formula("fraud~factor(stacked)+dti+fico+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(state)")
 lm_2 <- as.formula("fraud~factor(stacked)+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(lending_club)+factor(state)")
 
 cox <- list()
@@ -130,14 +130,15 @@ stargazer(ols,type = "text",omit = c("state","accepted_year"),omit.labels = c("s
 
 # Revised Credit Variables
 ```{r revised_creditvars}
+loandata['max'] <- ifelse(loandata$revised_loan_amount>35000,1,0)
 cox_formula1 <- as.formula("Surv(months,default)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)")
 cox_formula2 <- as.formula("Surv(months,default)~factor(stacked)+revised_dti+revised_loan_to_income+revised_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(loan_term)+inq_last_6mths+factor(state)+factor(lending_club)")
 
 
 cox <- list()
-cox[[1]] <- coxph(cox_formula2,data = loandata)
-cox[[2]] <- coxph(cox_formula1,data = loandata[loandata$lending_club==1,])
-cox[[3]] <- coxph(cox_formula1,data = loandata[loandata$lending_club==0,])
+cox[[1]] <- coxph(cox_formula2,data = loandata[loandata$stacked %in% c(0,1),])
+cox[[2]] <- coxph(cox_formula1,data = loandata[loandata$stacked %in% c(0,1) & loandata$lending_club==1,])
+cox[[3]] <- coxph(cox_formula1,data = loandata[loandata$stacked %in% c(0,1) & loandata$lending_club==0,])
 
 stargazer(cox,type = "text",omit = c("state"),omit.labels = c("state"),omit.stat = c("ll","logrank","max.rsq","lr","wald"),no.space = TRUE,title="COXPH")
 
@@ -146,13 +147,21 @@ stargazer(cox,type = "text",omit = c("state"),omit.labels = c("state"),omit.stat
 
 # Competitors loan-to-income
 ```{r loantoincome_competitor}
-cox_formula <- as.formula("Surv(months,default)~factor(stacked)+resid_com_loan_to_income+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(state)")
-cox_formula2 <- as.formula("Surv(months,default)~factor(stacked)+resid_com_loan_to_income+dti+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(lending_club)+factor(state)")
+loandata['over_limit'] <- ifelse(loandata$accepted_date<="2011-02-01" & loandata$lending_club==1 &loandata$revised_loan_amount>25000,1,0)
+loandata['over_limit'] <- ifelse(loandata$accepted_date>"2011-02-01" & loandata$lending_club==1 &loandata$revised_loan_amount>35000,1,loandata$over_limit)
+
+loandata['over_limit'] <- ifelse(loandata$accepted_date>"2013-05-01" & loandata$lending_club==0 & loandata$revised_loan_amount>35000 & loandata$subgrade>3,1,loandata$over_limit)
+loandata['over_limit'] <- ifelse(loandata$lending_club==0 & loandata$revised_loan_amount>25000 & loandata$subgrade<=3,1,loandata$over_limit)
+
+loandata['over_limit'] <- ifelse(loandata$accepted_date<"2013-05-01" & loandata$lending_club==0 &loandata$revised_loan_amount>25000 &  loandata$subgrade>3,1,loandata$over_limit)
+
+cox_formula <- as.formula("Surv(months,default)~factor(over_limit)+dti+fico+interest_rate+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(state)")
+cox_formula2 <- as.formula("Surv(months,default)~factor(over_limit)+dti+fico+interest_rate+loan_to_income+open_credit_lines+annual_income+credit_history_months+emp_length+factor(home_ownership)+loan_amount+factor(income_verified)+factor(term_60)+inq_last_6mths+factor(lending_club)+factor(state)")
 
 cox <- list()
-cox[[1]] <- coxph(cox_formula2,data = loandata)
-cox[[2]] <- coxph(cox_formula,data = loandata[loandata$lending_club==1,])
-cox[[3]] <- coxph(cox_formula,data = loandata[loandata$lending_club==0,])
+cox[[1]] <- coxph(cox_formula2,data = loandata[loandata$stacked %in% c(1),])
+cox[[2]] <- coxph(cox_formula,data = loandata[loandata$lending_club==1 & loandata$stacked %in% c(1),])
+cox[[3]] <- coxph(cox_formula,data = loandata[loandata$lending_club==0 & loandata$stacked %in% c(1),])
 
 stargazer(cox,type = output.type,omit = c("state"),omit.labels = c("state"),omit.stat = c("ll","logrank","max.rsq","lr","wald"),no.space = TRUE,title="COXPH")
 

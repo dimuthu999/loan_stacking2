@@ -13,10 +13,10 @@ trim <- function (x) {
 lc_raw = readRDS(file="E:/loan_stacking/lendingclub_raw.rds")
 lc_keep = c("id","member_id","loan_amnt","funded_amnt","term","int_rate","emp_length",
             "home_ownership","annual_inc","is_inc_v","accept_d","issue_d","addr_city","addr_state",
-            "dti","last_pymnt_d","len","fico","inq_last_6mths","delinq_amnt","open_acc")
+            "dti","last_pymnt_d","len","fico","inq_last_6mths","delinq_amnt","open_acc","default","num_months","purpose","sub_grade_num")
 lc_keep_names = c("loan_id","borrower_id","loan_amount","pct_funded","loan_term","interest_rate","emp_length",
-                  "home_ownership","annual_income","income_verified","accepted_date","issued_date","city","state",
-                  "dti","delinquent_amount","inq_last_6mths","open_credit_lines","last_payment_month","credit_history_months","fico")
+                  "home_ownership","annual_income","income_verified","accepted_date","issued_date","purpose","city","state",
+                  "dti","delinquent_amount","inq_last_6mths","open_credit_lines","last_payment_month","months","credit_history_months","default","subgrade","fico")
 
 loandata <- lc_raw[,names(lc_raw) %in% lc_keep]
 names(loandata) <- lc_keep_names
@@ -39,19 +39,22 @@ loandata <- loandata[ , order(names(loandata))]
       loandata['delinquent_days'] <- as.numeric(loandata$data_date - as.Date(loandata$last_payment_month, "%m/%d/%Y"))-30
       loandata$last_payment_month <- as.yearmon(as.Date(loandata$last_payment_month, "%m/%d/%Y"))
       loandata['lending_club'] <-1
+      loandata <- loandata[loandata$months>1,]
+      i <- sapply(loandata, is.factor)
+      loandata[i] <- lapply(loandata[i], as.character)
 
 prosper_raw = readRDS(file="E:/loan_stacking/prosper_raw.rds")
 prosper_raw <- prosper_raw[!duplicated(prosper_raw),]
 prosper_keep = c("LoanKey","MemberKey.x","LoanOriginalAmount","PercentFunded.x","Term","BorrowerRate.x","MonthsEmployed",
                  "IsBorrowerHomeowner","StatedMonthlyIncome.x","IncomeVerifiable.x","ListingCreationDate.y",
-                 "LoanOriginationDate.x","BorrowerCity","BorrowerState.y","LoanCurrentDaysDelinquent","DebtToIncomeRatio",
-                 "FirstRecordedCreditLine.x","FICO","InquiriesLast6Months.x","AmountDelinquent.x","OpenCreditLines.x")
-prosper_keep_names = c("loan_term","interest_rate","home_ownership","credit_history_months","open_credit_lines","inq_last_6mths","delinquent_amount","dti","income_verified",
+                 "LoanOriginationDate.x","BorrowerCity","BorrowerState.y","LoanCurrentDaysDelinquent","DebtToIncomeRatio","ProsperRating..numeric.",
+                 "FirstRecordedCreditLine.x","FICO","InquiriesLast6Months.x","AmountDelinquent.x","OpenCreditLines.x","default","months")
+prosper_keep_names = c("loan_term","interest_rate","subgrade","home_ownership","credit_history_months","open_credit_lines","inq_last_6mths","delinquent_amount","dti","income_verified",
                        "annual_income","loan_id","last_payment_month","loan_amount","issued_date","borrower_id","pct_funded",
-                       "accepted_date","emp_length","state","city","fico")
+                       "default","months","accepted_date","emp_length","state","city","fico")
 loandata2 <- prosper_raw[,names(prosper_raw) %in% prosper_keep]
 names(loandata2) <- prosper_keep_names
-loandata2 <- data.frame(lapply(loandata2, as.character), stringsAsFactors=FALSE)
+# loandata2 <- data.frame(lapply(loandata2, as.character), stringsAsFactors=FALSE)
 loandata2 <- loandata2[ , order(names(loandata2))]
       loandata2$annual_income = as.numeric(loandata2$annual_income)*12
       loandata2$accepted_date = as.Date(substr(loandata2$accepted_date,1,10))
@@ -78,6 +81,16 @@ loandata2 <- loandata2[ , order(names(loandata2))]
       loandata2$inq_last_6mths <- as.numeric(loandata2$inq_last_6mths)
       loandata2$delinquent_amount <- as.numeric(loandata2$delinquent_amount)
       loandata2['lending_club'] = 0
-
+      loandata2$default <- ifelse(loandata2$delinquent_days>120,1,0)
+      loandata2$months<- ifelse(loandata2$default==1,round((as.numeric(loandata2$data_date)-loandata2$delinquent_days-as.numeric(loandata2$accepted_date))/30,1),
+                                round((as.numeric(loandata2$data_date)-120-as.numeric(loandata2$accepted_date))/30,1))
+      loandata2 <- loandata2[loandata2$months>1,]
+      i <- sapply(loandata2, is.factor)
+      loandata2[i] <- lapply(loandata2[i], as.character)
+      
+loandata$purpose <- NULL      
 loandata <- rbind(loandata,loandata2)
-saveRDS(loandata,file="lc_prosper_merged.rds")
+
+saveRDS(loandata,file="lc_prosper_merged_old_data.rds")
+
+# summary(coxph(Surv(time = months,event = default)~interest_rate,data=loandata))
